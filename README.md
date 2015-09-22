@@ -22,6 +22,21 @@ PhantomJS: http://phantomjs.org
 
 
 
+# Example
+```
+import std.stdio;
+import Xaru;
+void main(){
+	auto bot = new MaruMaru();
+	foreach( element; bot.search("소녀") ){
+		writeln( element );
+	}
+	write("===== Done! =====");
+}
+```
+
+
+
 # TODO
   1. support SlimerJS
   2. Refactoring(lol)
