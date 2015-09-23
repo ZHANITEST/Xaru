@@ -157,14 +157,10 @@ class Cartoon{
 		foreach( patthen; regex_patthens )
 		{
 			auto result = match( html_fix, patthen );
-			string temp = result.front.hit();
-			if( temp != "" )
-			{
-				return temp;
-				break;
+			if( !result.empty() ){
+				return result.front.hit();
 			}
 		}
-
 		return "can't found";
 	}
 
