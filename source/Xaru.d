@@ -55,7 +55,7 @@ enum Category{
 	END			= ["완결", "33"],
 	ANG			= ["붕탁", "34"],
 	Y			= ["와이!", "35"],
-	OTOKONOKO	= ["오토코노코+엔솔로지", "36"],
+	OTOKONOKO	= ["오토코노코+엔솔로지," "36"],
 	SHEMALE		= ["여장소년+엔솔로지", "37"],
 	OTOKONOKO1	= ["오토코노코타임", "38"],
 	ANG_END		= ["붕탁+완결", "39"]
@@ -87,7 +87,7 @@ class MaruMaru{
 	string[string][] search( string keyword ){
 		string[string][] result;
 		navigate("http://marumaru.in/?r=home&mod=search&keyword="~keyword~"&x=0&y=0");
-		string patthen = "<a href=\"(/b/manga/[\\d]+)\" class=\"subject\">\n<table>\n<tr>\n<td>\n<span class=\"[\\S]+\"><img src=\"http://[\\dmarumarubp\\.blogspot]+\\.[incom]+.[quimagckrfles]+/[\\S]+\" width=\"[\\d]+\" height=\"[\\d]+\" alt=\"[\\S]*\"/></span>\n</td>\n<td>\n<div class=\"sbjbox\">\n<b>([\\S \\[\\]]+)</b>";
+		string patthen = "<a href=\"/b/manga/([\\d]+)\" class=\"subject\">\n<table>\n<tr>\n<td>\n<span class=\"[\\S]+\"><img src=\"http://[\\dmarumarubp\\.blogspot]+\\.[incom]+.[quimagckrfles]+/[\\S]+\" width=\"[\\d]+\" height=\"[\\d]+\" alt=\"[\\S]*\"/></span>\n</td>\n<td>\n<div class=\"sbjbox\">\n<b>([\\S \\[\\]]+)</b>";
 		auto match_result = matchAll( this.HTML, regex(patthen) );
 		foreach( element; match_result ){
 			result ~= [ element[2]:element[1] ];
@@ -96,6 +96,34 @@ class MaruMaru{
 	}
 
 	string[string] getCartoonList( Category cat_ ){
+		auto cat = cat_;
+		string id		= cat[1];
+		string category = cat[0];
+		string base_url = "www.marumaru.in/?c=1/"~id;
+		string[string] CartoonList;	// 인덱스 리스트
+		uint page_count;			// 페이지 수
+		
+		// 이 카테고리의 페이지는 얼마나 되느뇨?
+		string html = GET( base_url );
+		auto match_result = matchAll( html, regex(r">([\d]+)</[span]{1,4}>") ); string[] temp;
+		foreach( element; match_result ){
+			temp ~= element[1];
+		}
+		sort( temp ); page_count = to!uint( temp[temp.length-1] );
+		
+		// 페이지 별로 파싱 (1, 2, 3 페이지...)
+		foreach( page; temp ){
+			html = GET( base_url~"&cat="~category~"&p="~page );
+			auto urls_match = matchAll( html, regex( r"uid=([\d]+).><span class=.cat.>[\S ]+<\/span>([\d\S ]+)<\/a>"));
+			foreach( element; urls_match ){
+				CartoonList[ element[2] ] ~= element[1] ;
+			}
+		}
+		return CartoonList;
+	}
+
+	string[string] getIndexlist( Category cat_ )
+	{
 		auto cat = cat_;
 		string id		= cat[1];
 		string category = cat[0];
@@ -145,6 +173,14 @@ class Cartoon{
 
 
 
+	bool check(){
+		// reload it.
+		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
+		return false;
+	}
+
+
+
 	string getCoverImage(){		
 		string html_fix = stripBody();
 		string[] regex_patthens = [
@@ -176,8 +212,7 @@ class Cartoon{
 
 
 
-	// ~화:링크 얻기
-	string[string][] getList(){
+	string stripHref(){
 		string temp = replaceAll( stripBody(), regex("</div>"), "");
 		temp = replaceAll( temp, regex("</span>"), "");
 		temp = replaceAll( temp, regex("</font>"), "");
@@ -236,14 +271,31 @@ class Cartoon{
 		foreach( e; tags ) { temp = replaceAll(temp,regex(e),""); }
 		foreach( e; singles ){ temp = replaceAll(temp,regex(e),""); }
 
+		// 교정 작업.
+		// -- </a>href="url">chap</a>
+		temp = replaceAll(temp,regex("</a>href"),"</a>\n<ahref");
+		// -- </a>large;>
+		temp = replaceAll(temp,regex("a>[\\S]+;>"),"a>");
+
+
+
 		// 마지막으로 보기 좋으라고
 		temp = replaceAll(temp,regex("<ahref"),"<a href");
 		temp = replaceAll(temp,regex("><a"),">\n<a");
 
+
+		return temp;
+	}
+
+
+
+	// ~화:링크 얻기
+	string[string][] getList(){
 		string[string][] result;
+		string temp = stripHref();
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://www.mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "<a href=\"(http://[www\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 				{ result~= [ e[2]:e[1] ]; }
 		}
