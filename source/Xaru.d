@@ -229,7 +229,7 @@ class Cartoon{
 			" *margin: [\\dptx]+; *",
 			" *padding: [\\dptx]+; *",
 
-			"background-\"",
+			"background[-\"]*",
 			"border-bottom-\"",
 			" *border-bottom-width: [\\d]+[\\.\\dpxt]*; *",
 			" *border-bottom-style: [\\S]+; *",
@@ -239,7 +239,8 @@ class Cartoon{
 
 			" *box-sizing: [\\S]+;\"* *",
 
-			" *style=\"\"*"
+			" *style=\"\"*",
+			" *word-wrap: *[\\S]+[ ;]*"
 		];
 
 		string[] tags = [
@@ -251,7 +252,7 @@ class Cartoon{
 			" *list-style-type: [\\S]+; *",
 			" *face=\"[돋움굴림나눔맑은고딕체a-zA-Z, -]+\" *",
 			" *font-[\\S]+: [\\S\\d]+; *",
-			" *outline: [\\d]+[pxt]*; *"
+			" *outline: [\\d]+[pxt]*; *",
 		];
 
 		string[] singles = [
