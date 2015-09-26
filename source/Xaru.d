@@ -276,7 +276,8 @@ class Cartoon{
 		temp = replaceAll(temp,regex("</a>href"),"</a>\n<ahref");
 		// -- </a>large;>
 		temp = replaceAll(temp,regex("a>[\\S]+;>"),"a>");
-
+		// -- <a  href
+		temp = replaceAll(temp,regex("<a [\\s]+href"),"<a href");
 
 
 		// 마지막으로 보기 좋으라고
