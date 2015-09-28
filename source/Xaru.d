@@ -160,6 +160,9 @@ class Cartoon{
 	this( string id ){
 		this.ID = id;
 		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
+		if( this.HTML.indexOf( "<div align=\"center\">\n<center>" ) == -1 ){
+			throw new Exception("Can't not open http://marumaru.in/b/manga/"~id);
+		}
 	}
 
 
@@ -169,14 +172,6 @@ class Cartoon{
 		uint x = this.HTML.indexOf( "<div id=\"vContent\" class=\"content\">" ) + "<div id=\"vContent\" class=\"content\">".length;
 		uint y = this.HTML.indexOf( "<div align=\"center\">\n<center>" );
 		return( this.HTML[x..y] );
-	}
-
-
-
-	bool check(){
-		// reload it.
-		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
-		return false;
 	}
 
 
@@ -229,8 +224,8 @@ class Cartoon{
 			" *margin: [\\dptx]+; *",
 			" *padding: [\\dptx]+; *",
 
-			"background[-\"]*",
-			"border-bottom-\"",
+			"background[-\" ]*",
+			"border-bottom-\" *",
 			" *border-bottom-width: [\\d]+[\\.\\dpxt]*; *",
 			" *border-bottom-style: [\\S]+; *",
 
@@ -245,14 +240,13 @@ class Cartoon{
 
 		string[] tags = [
 			" *align=\"[\\S]+\" *",
-			" *target=\"[\\S]+\" *",
 			" *color=\"[#\\d]+\" *",
 			" *size=\"[\\d]+[\\.\\dptx]*\" *",
-			" *class=\"[\\S]+\"",
+			" *class=\"[\\S]+\" *",
 			" *list-style-type: [\\S]+; *",
 			" *face=\"[돋움굴림나눔맑은고딕체a-zA-Z, -]+\" *",
 			" *font-[\\S]+: [\\S\\d]+; *",
-			" *outline: [\\d]+[pxt]*; *",
+			" *outline: [\\d]+[pxt]*; *"
 		];
 
 		string[] singles = [
@@ -279,8 +273,11 @@ class Cartoon{
 		temp = replaceAll(temp,regex("a>[\\S]+;>"),"a>");
 		// -- <a  href
 		temp = replaceAll(temp,regex("<a [\\s]+href"),"<a href");
-
-
+		// -- target="blank, self"
+		temp = replaceAll(temp,regex(" *target=\"_[blanksef]+\" *"),"");
+		// -- </a>href
+		temp = replaceAll(temp,regex(" *</a>href *"),"</a>\n<a href");
+		
 		// 마지막으로 보기 좋으라고
 		temp = replaceAll(temp,regex("<ahref"),"<a href");
 		temp = replaceAll(temp,regex("><a"),">\n<a");
