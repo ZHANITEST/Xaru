@@ -14,17 +14,14 @@ API for "http://marumaru.in".
 
 
 # How to build it?
-Requirement: DMD 2.0.*, Git
+  1. DMD 2.0.*
+  2. Git
+  3. PhantomJS: http://phantomjs.org
 ```
 git clone https://github.com/zhanitest/xaru.git
 cd xaru
 dmd xaru
 ```
-
-
-
-# Requirement
-PhantomJS: http://phantomjs.org
 
 
 
