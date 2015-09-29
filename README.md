@@ -7,6 +7,12 @@ API for "http://marumaru.in".
 
 
 
+# License
+  1. Boost v1.0(arsd.*)
+  2. LGPL v2.1(xaru)
+
+
+
 # How to build it?
 Requirement: DMD 2.0.*, Git
 ```
@@ -47,8 +53,3 @@ result:
 # TODO
   1. support SlimerJS
   2. Refactoring(lol)
-
-
-
-# 라이센스(License)
-LGPL v2.1
