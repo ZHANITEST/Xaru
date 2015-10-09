@@ -1,4 +1,4 @@
-# 자루(Xaru)
+# Xaru
 API for "http://marumaru.in".
 
   1. 순수하게 D언어와 표준라이브러리(phobos) 작성되었습니다.
