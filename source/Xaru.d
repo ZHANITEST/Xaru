@@ -176,8 +176,8 @@ class Cartoon{
 	}
 
 	private void fetch( string filename, string body_ ){
-		//auto f = new File( filename, "w"); f.write( body_ ); f.close();
-		//0+0;
+		auto f = new File( filename, "w"); f.write( body_ ); f.close();
+		
 	}
 
 
@@ -285,20 +285,25 @@ class Cartoon{
 	private void fileDownload( string html, string path )
 	{
 		string[] regex_patthens = [
-			"\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4}))\"",
-			"\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\""
+			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
+			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\""
 		];
 		uint c = 0;
 		foreach( patthen; regex_patthens )
 		{
 			auto match_result = matchAll( html, regex(patthen) );
-			if( !(match_result.empty()) ){
+			if( !(match_result.empty()) )
+			{
 				foreach( element; match_result )
 				{
 					fetch("download_link.txt", element[1]~"\n"~path~"/"~to!string(c)~"_"~element[2] );
 					std.net.curl.download( element[1], path~"/"~to!string(c)~"_"~element[2] );	
 					c += 1;
 				}
+			}
+			else
+			{
+				fetch("matching_fail.txt", html);
 			}
 		}
 	}
