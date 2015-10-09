@@ -7,6 +7,7 @@ import std.algorithm;
 import std.string:indexOf;
 import std.file;
 import std.process;
+import arsd.dom;
 
 string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
 
@@ -160,7 +161,7 @@ class Cartoon{
 	this( string id ){
 		this.ID = id;
 		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
-		if( this.HTML.indexOf( "<div align=\"center\">\n<center>" ) == -1 ){
+		if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
 			throw new Exception("Can't not open http://marumaru.in/b/manga/"~id);
 		}
 	}
@@ -172,6 +173,11 @@ class Cartoon{
 		uint x = this.HTML.indexOf( "<div id=\"vContent\" class=\"content\">" ) + "<div id=\"vContent\" class=\"content\">".length;
 		uint y = this.HTML.indexOf( "<div align=\"center\">\n<center>" );
 		return( this.HTML[x..y] );
+	}
+
+	private void fetch( string filename, string body_ ){
+		//auto f = new File( filename, "w"); f.write( body_ ); f.close();
+		//0+0;
 	}
 
 
@@ -208,82 +214,32 @@ class Cartoon{
 
 
 	string stripHref(){
-		string temp = replaceAll( stripBody(), regex("</div>"), "");
-		temp = replaceAll( temp, regex("</span>"), "");
-		temp = replaceAll( temp, regex("</font>"), "");
+		//auto document = new Document();
+		string temp = stripBody();
+		string body_;
+		temp = replaceAll( temp, regex("><a "), ">\n<a ");
+		temp = replaceAll( temp, regex("</[^a][font]*>"), "");
+		temp = replaceAll( temp, regex("</[^a][span]*>"), "");
+		temp = replaceAll( temp, regex(" *&nbsp; *"), "");
 
-		string[] styles = [
-			" *line-height: [\\d]+\\.*[\\d]*[ptx;\"]*",
-			" *color: rgb\\([\\d]+, [\\d]+, [\\d]+\\)[ ;]*",
-			" *font-family: [\\S]+[; ,]*[\\D]*; *",
-			" *font-size: *[\\d]*[\\.\\dptxem]*[; ]*",
-			" *text-decoration: [\\S]+; *",
-			" *text-align: [\\S]+; *",
-
-			" *border: [\\dptx]+; *",
-			" *margin: [\\dptx]+; *",
-			" *padding: [\\dptx]+; *",
-
-			"background[-\" ]*",
-			"border-bottom-\" *",
-			" *border-bottom-width: [\\d]+[\\.\\dpxt]*; *",
-			" *border-bottom-style: [\\S]+; *",
-
-			" *vertical-align: [\\S]+; *",
-			" *margin-bottom: *[\\d]*[\\.\\dptxem]*[; ]*",
-
-			" *box-sizing: [\\S]+;\"* *",
-
-			" *style=\"\"*",
-			" *word-wrap: *[\\S]+[ ;]*"
-		];
-
-		string[] tags = [
-			" *align=\"[\\S]+\" *",
-			" *color=\"[#\\d]+\" *",
-			" *size=\"[\\d]+[\\.\\dptx]*\" *",
-			" *class=\"[\\S]+\" *",
-			" *list-style-type: [\\S]+; *",
-			" *face=\"[돋움굴림나눔맑은고딕체a-zA-Z, -]+\" *",
-			" *font-[\\S]+: [\\S\\d]+; *",
-			" *outline: [\\d]+[pxt]*; *"
-		];
-
-		string[] singles = [
-			" *&nbsp[ ;]*",
-			" *</*div\"*> *",
-			" *</*br>",
-			" *</*div\"*>",
-			" *</*span\"* *>*",
-			" *</*font\"* *>*",
-			" *</*p> *",
-			" *</*li\"*> *",
-			" *</*ol> *",
-			" *</*h1> *"
-		];
-	
-		foreach( e; styles ) { temp = replaceAll(temp,regex(e),""); }
-		foreach( e; tags ) { temp = replaceAll(temp,regex(e),""); }
-		foreach( e; singles ){ temp = replaceAll(temp,regex(e),""); }
-
-		// 교정 작업.
-		// -- </a>href="url">chap</a>
-		temp = replaceAll(temp,regex("</a>href"),"</a>\n<ahref");
-		// -- </a>large;>
-		temp = replaceAll(temp,regex("a>[\\S]+;>"),"a>");
-		// -- <a  href
-		temp = replaceAll(temp,regex("<a [\\s]+href"),"<a href");
-		// -- target="blank, self"
-		temp = replaceAll(temp,regex(" *target=\"_[blanksef]+\" *"),"");
-		// -- </a>href
-		temp = replaceAll(temp,regex(" *</a>href *"),"</a>\n<a href");
-		
-		// 마지막으로 보기 좋으라고
-		temp = replaceAll(temp,regex("<ahref"),"<a href");
-		temp = replaceAll(temp,regex("><a"),">\n<a");
-
-
-		return temp;
+		string[] split_result = split(temp, regex("\n") );
+		foreach( line; split_result)
+		{
+			string href, innerText;
+			auto obj = match( line, regex("href=\"[https]*://[w]*.mangaumaru.com/archives/[\\d]+") );
+			if( !obj.empty() )
+			{
+				href = obj.front.hit();
+				fetch( "href.txt", href );
+				auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
+				foreach( e; obj2 ){ innerText = e[1]; }
+				fetch( "href2.txt", innerText );
+				body_ ~= "<a "~href~"\">"~innerText~"</a>\n";
+			}
+			
+		}
+		fetch( "body_.txt", body_ );
+		return body_;
 	}
 
 
@@ -294,29 +250,54 @@ class Cartoon{
 		string temp = stripHref();
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://[www\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 				{ result~= [ e[2]:e[1] ]; }
+		}
+		result.length -= result.uniq().copy(result).length;
+		return result;
+	}
+
+
+
+	string[string] getListByArray(){
+		string[string] result;
+		string temp = stripHref();
+		foreach( line; split(temp, regex("\n")) )
+		{
+			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
+			foreach( e; regex_result )
+			{
+				string key, value;
+				key = e[2]; value = e[1];
+				result[key] = value;
+			}
 		}
 		return result;
 	}
 	
 
+	// 디렉토리 만들기
+	private void makedir( string path ){
+		if( !exists(path) ){ mkdir(path); }
+	}
 
 	private void fileDownload( string html, string path )
 	{
 		string[] regex_patthens = [
-			r"http:\/\/www.mangaumaru.com\/wp-content\/uploads\/[\d]{4}\/[\d]{2}\/([\S]+\.[jpneg]{3,4})",
-			r"http:\/\/www.mangaumaru.com\/wp-content\/uploads\/[\d]{4}\/[\d]{2}\/([\S]+\.[jpneg]{3,4})\?[\S]+"
+			"\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4}))\"",
+			"\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\""
 		];
-		
+		uint c = 0;
 		foreach( patthen; regex_patthens )
 		{
 			auto match_result = matchAll( html, regex(patthen) );
 			if( !(match_result.empty()) ){
 				foreach( element; match_result )
 				{
-					std.net.curl.download( element[0], element[1] );
+					fetch("download_link.txt", element[1]~"\n"~path~"/"~to!string(c)~"_"~element[2] );
+					std.net.curl.download( element[1], path~"/"~to!string(c)~"_"~element[2] );	
+					c += 1;
 				}
 			}
 		}
@@ -324,7 +305,7 @@ class Cartoon{
 
 
 
-	void download( string key, string path="./" ){
+	void download( string key, string path="." ){
 		string[string][] list = getList();
 		foreach( element; list )
 		{
@@ -333,6 +314,7 @@ class Cartoon{
 				//std.net.curl.download(element[key]);
 				auto ghost = new Ghost( element[key] );
 				string html = ghost.Grab();
+				fetch( "body_ghost.txt", html );
 				fileDownload( html, path );
 			}
 		}
