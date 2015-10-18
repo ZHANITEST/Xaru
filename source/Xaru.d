@@ -22,8 +22,23 @@ import arsd.dom; // dom parser
 
 
 
+
+
 // 카테고리 리스트
 string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
+
+
+
+
+
+//
+// 디렉토리 만들기
+//
+void makedir( string path ){
+		if( !exists(path) ){ mkdir(path); }
+}
+
+
 
 
 
@@ -117,13 +132,10 @@ string GET( string url ){
 //
 string stripSpecialChars( string body_ ){
 	string result = body_;
-	dchar[dchar] table = [
-		'/' : '_' , ':' : '_',
-		'*' : '_' , '?' : '_',
-		'<' : '_' , '>' : '_', '|' : '_'];
-
-	// replaceAll /[\\\\\/:*?"<>|]/
-	result = std.string.translate(body_, table);
+	string table[] = [ "/", ":", "*", "?", "<", ">", "|" ];
+	foreach( e; table ){
+		result = result.replace( e, "_" );
+	}
 	return result;
 }
 
@@ -350,10 +362,10 @@ class Cartoon{
 	//
 	// 디렉토리 만들기
 	//
-	private void makedir( string path ){
+	/*private void makedir( string path ){
 		string path_real = stripSpecialChars(path);
 		if( !exists(path_real) ){ mkdir(path_real); }
-	}
+	}*/
 
 
 
@@ -365,7 +377,7 @@ class Cartoon{
 		string[] regex_patthens = [
 			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
 			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
-			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))\""
+			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\""
 		];
 		uint c = 0;
 		foreach( patthen; regex_patthens )
@@ -404,7 +416,6 @@ class Cartoon{
 		{
 			if( element.keys[0] == key )
 			{
-				//std.net.curl.download(element[key]);
 				auto ghost = new Ghost( element[key] );
 				string html = ghost.Grab();
 				fetch( "body_ghost.txt", html );
