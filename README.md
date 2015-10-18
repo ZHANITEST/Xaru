@@ -1,7 +1,7 @@
-# 자루(Xaru)
+# Xaru
 API for "http://marumaru.in".
 
-  1. 순수하게 D언어와 표준라이브러리(phobos) 작성되었습니다.
+  1. 순수하게 D언어와 표준라이브러리(phobos)로 작성되었습니다.
   2. 오픈소스(LGPL v2)입니다.
   3. 제대로 된 HTML파서 없이 Regex 땜질로 이루어져있습니다.
 
@@ -10,6 +10,8 @@ API for "http://marumaru.in".
 # License
   1. Boost v1.0(arsd.*)
   2. LGPL v2.1(xaru)
+
+..or with BSD(phantomJS)
 
 
 
@@ -48,5 +50,7 @@ result:
 
 
 # TODO
-  1. support SlimerJS
-  2. Refactoring(lol)
+  1. support "SlimerJS"
+  2. password process
+  3. Refactoring
+  4. Linux(*buntu)
