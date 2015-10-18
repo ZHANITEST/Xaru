@@ -1,4 +1,14 @@
-﻿module Xaru;
+﻿/*
+
+	Xaru.d
+	License: LGPL v2
+
+	By ZHANITEST
+		* zhanitest.egloos.com
+		* steamcommunity.com/id/zhanitest
+
+*/
+module Xaru;
 import std.net.curl;
 import std.regex;
 import std.stdio;
@@ -7,10 +17,27 @@ import std.algorithm;
 import std.string:indexOf;
 import std.file;
 import std.process;
-import arsd.dom;
+import std.array:replace;
+import arsd.dom; // dom parser
 
+
+
+// 카테고리 리스트
 string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
 
+
+
+//
+// 로그 작성(기본값:true)
+//
+const bool LOG_ENABLE = true;
+
+
+
+
+//
+// PhantomJS DIRTY Handler
+//
 class Ghost{
 	public string Url;
 	public string FileName;
@@ -45,7 +72,14 @@ class Ghost{
 		return result;
 	}
 }
-// 만화 카테고리 데이터
+
+
+
+
+
+//
+// Category Enum
+//
 enum Category{
 	SHORT		= ["단편", "27"],
 	WEEK		= ["주간", "28"],
@@ -66,6 +100,9 @@ enum Category{
 
 
 
+//
+// GET method by cURL
+//
 string GET( string url ){
 	auto http = HTTP( url ); http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
 	return( cast(string)get(url, http) );
@@ -75,6 +112,28 @@ string GET( string url ){
 
 
 
+//
+// spacial Character replace
+//
+string stripSpecialChars( string body_ ){
+	string result = body_;
+	dchar[dchar] table = [
+		'/' : '_' , ':' : '_',
+		'*' : '_' , '?' : '_',
+		'<' : '_' , '>' : '_', '|' : '_'];
+
+	// replaceAll /[\\\\\/:*?"<>|]/
+	result = std.string.translate(body_, table);
+	return result;
+}
+
+
+
+
+
+//
+// MaruMaru Site parsing class
+//
 class MaruMaru{
 	private string HTML;
 	private string BASE_URl;
@@ -84,7 +143,9 @@ class MaruMaru{
 
 
 
+	//
 	// 검색
+	//
 	string[string][] search( string keyword ){
 		string[string][] result;
 		navigate("http://marumaru.in/?r=home&mod=search&keyword="~keyword~"&x=0&y=0");
@@ -96,21 +157,27 @@ class MaruMaru{
 		return result;
 	}
 
+
+
+	//
+	// 만화 목록 가져오기
+	//
 	string[string] getCartoonList( Category cat_ ){
 		auto cat = cat_;
-		string id		= cat[1];
-		string category = cat[0];
+		string id		= cat[1]; string category = cat[0];
 		string base_url = "www.marumaru.in/?c=1/"~id;
 		string[string] CartoonList;	// 인덱스 리스트
 		uint page_count;			// 페이지 수
 		
 		// 이 카테고리의 페이지는 얼마나 되느뇨?
 		string html = GET( base_url );
-		auto match_result = matchAll( html, regex(r">([\d]+)</[span]{1,4}>") ); string[] temp;
-		foreach( element; match_result ){
-			temp ~= element[1];
-		}
-		sort( temp ); page_count = to!uint( temp[temp.length-1] );
+
+		// match_result TO array
+		auto match_result = matchAll( html, regex(r">([\d]+)</[span]{1,4}>") );
+		string[] temp;
+		foreach( element; match_result ){ temp ~= element[1]; }
+		sort( temp );
+		page_count = to!uint( temp[temp.length-1] );
 		
 		// 페이지 별로 파싱 (1, 2, 3 페이지...)
 		foreach( page; temp ){
@@ -122,42 +189,24 @@ class MaruMaru{
 		}
 		return CartoonList;
 	}
-
-	string[string] getIndexlist( Category cat_ )
-	{
-		auto cat = cat_;
-		string id		= cat[1];
-		string category = cat[0];
-		//string base_url = "www.marumaru.in/?c=1/"~id~"&cat="~category~"&p=1";
-		string base_url = "www.marumaru.in/?c=1/"~id;
-		string[string] CartoonList;	// 인덱스 리스트
-		ubyte page_count;			// 페이지 수
-		
-		// 이 카테고리의 페이지는 얼마나 되느뇨?
-		string html = GET( base_url );
-		auto pageCount_Result = matchAll( html, regex(r">([\d]+)</[span]{1,4}>") ); string[] temp;
-		foreach( element; pageCount_Result ){ temp ~= element[1]; }
-		sort( temp ); page_count = to!ubyte( temp[ temp.length-1 ] );
-		
-		// 페이지 별로 파싱 (1, 2, 3 페이지...)
-		foreach( page; temp ){
-			html = cast(string)get( base_url~"&cat="~category~"&p="~page );
-			auto urlNtitle = matchAll( html, regex( r"uid=([\d]+).><span class=.cat.>[\S ]+<\/span>([\d\S ]+)<\/a>"));
-			// 1차 패턴: <a href\=\"([\S].+)\"><span class=\"cat\">\[\S{1,5}\]<\/span>([0-9 \S]+)<\/a>
-			// 2차 패턴: uid=([\d]+).><span class=.cat.>\[\S{1,5}\]<\/span>([0-9 \S]+)<\/a>
-			// 3차 패턴: uid=([\d]+).><span class=.cat.>[\S ]+<\/span>([\d\S ]+)<\/a>
-			foreach( element; urlNtitle ){
-				CartoonList[ element[2] ] ~= element[1] ;
-			}
-		}
-		return CartoonList;
-	}
 }
 
+
+
+
+
+//
+// MaruMaru Cartoon parsing class
+//
 class Cartoon{
 	private string ID;
 	private string HTML;
 
+
+
+	//
+	// 생성자
+	//
 	this( string id ){
 		this.ID = id;
 		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
@@ -168,20 +217,31 @@ class Cartoon{
 
 
 
-	// vContent 내용만 가져오기.
+	//
+	// 본문만 따오기(vContent)
+	//
 	private string stripBody(){
 		uint x = this.HTML.indexOf( "<div id=\"vContent\" class=\"content\">" ) + "<div id=\"vContent\" class=\"content\">".length;
 		uint y = this.HTML.indexOf( "<div align=\"center\">\n<center>" );
 		return( this.HTML[x..y] );
 	}
 
+
+
+	//
+	// 파일 로그
+	//
 	private void fetch( string filename, string body_ ){
-		auto f = new File( filename, "w"); f.write( body_ ); f.close();
-		
+		if(LOG_ENABLE){
+			auto f = new File( filename, "w"); f.write( body_ ); f.close();
+		}
 	}
 
 
 
+	//
+	// 커버이미지 URL 가져오기
+	//
 	string getCoverImage(){		
 		string html_fix = stripBody();
 		string[] regex_patthens = [
@@ -198,30 +258,35 @@ class Cartoon{
 				return result.front.hit();
 			}
 		}
-		return "can't found";
+		return "";
 	}
 
 
 
+	//
 	// 만화제목 얻기
+	//
 	string getTitle(){
 		auto result = match( this.HTML, regex(r"<h1>(.+)<\/h1>") ); string a;
-		foreach( temp; result )
-			{ a = temp[1]; }
+		foreach( temp; result ) { a = temp[1]; }
 		return a;
 	}
 
 
 
+	//
+	// <a href~ 스타일로 코드 새로 작성
+	//
 	string stripHref(){
 		//auto document = new Document();
 		string temp = stripBody();
+		fetch( "stripBody.txt", temp );
 		string body_;
 		temp = replaceAll( temp, regex("><a "), ">\n<a ");
 		temp = replaceAll( temp, regex("</[^a][font]*>"), "");
 		temp = replaceAll( temp, regex("</[^a][span]*>"), "");
 		temp = replaceAll( temp, regex(" *&nbsp; *"), "");
-
+		temp = replaceAll( temp, regex("><a "), ">\n<a ");
 		string[] split_result = split(temp, regex("\n") );
 		foreach( line; split_result)
 		{
@@ -244,7 +309,9 @@ class Cartoon{
 
 
 
-	// ~화:링크 얻기
+	//
+	// ~화:링크 얻기( 다형식 연관 배열 스타일로)
+	//
 	string[string][] getList(){
 		string[string][] result;
 		string temp = stripHref();
@@ -259,7 +326,9 @@ class Cartoon{
 	}
 
 
-
+	//
+	// ~화:링크 얻기(연관배열 스타일로)
+	//
 	string[string] getListByArray(){
 		string[string] result;
 		string temp = stripHref();
@@ -277,28 +346,44 @@ class Cartoon{
 	}
 	
 
+
+	//
 	// 디렉토리 만들기
+	//
 	private void makedir( string path ){
-		if( !exists(path) ){ mkdir(path); }
+		string path_real = stripSpecialChars(path);
+		if( !exists(path_real) ){ mkdir(path_real); }
 	}
 
+
+
+	//
+	// 파일 다운로드
+	//
 	private void fileDownload( string html, string path )
 	{
 		string[] regex_patthens = [
 			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
-			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\""
+			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
+			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))\""
 		];
 		uint c = 0;
 		foreach( patthen; regex_patthens )
 		{
 			auto match_result = matchAll( html, regex(patthen) );
-			if( !(match_result.empty()) )
+			if( !(match_result.empty())  )
 			{
 				foreach( element; match_result )
 				{
-					fetch("download_link.txt", element[1]~"\n"~path~"/"~to!string(c)~"_"~element[2] );
-					std.net.curl.download( element[1], path~"/"~to!string(c)~"_"~element[2] );	
-					c += 1;
+
+					string url = element[1];
+					string file_name = element[2];
+					// 우마루 인장 파일(oeCAmOD.jpg) 열외
+					if( file_name != "oeCAmOD.jpg"){
+						fetch("download_link.txt", url~"\n"~path~"/"~to!string(c)~"_"~file_name );
+						std.net.curl.download( url, path~"/"~to!string(c)~"_"~file_name );	
+						c += 1;
+					}
 				}
 			}
 			else
@@ -310,6 +395,9 @@ class Cartoon{
 
 
 
+	//
+	// 다운로드 실행
+	//
 	void download( string key, string path="." ){
 		string[string][] list = getList();
 		foreach( element; list )
@@ -325,6 +413,14 @@ class Cartoon{
 		}
 	}
 }
+
+
+
+
+
+//
+// 문자열 형식을 카테고리(enum) 데이터로
+//
 public Category str2cat( string obj ){
 	switch( obj ){
 		case "주간":
