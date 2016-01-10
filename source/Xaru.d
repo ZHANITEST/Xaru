@@ -377,31 +377,38 @@ class Cartoon{
 		string[] regex_patthens = [
 			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
 			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
+			"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
 			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\""
 		];
-		uint c = 0;
+		uint counter = 0;
 		foreach( patthen; regex_patthens )
 		{
 			auto match_result = matchAll( html, regex(patthen) );
 			if( !(match_result.empty())  )
 			{
-				foreach( element; match_result )
-				{
+				//string[][] result_array;
+				foreach( element; match_result ){
+					string fileName = element[2];
+					string urlName = element[1];
 
-					string url = element[1];
-					string file_name = element[2];
-					// 우마루 인장 파일(oeCAmOD.jpg) 열외
-					if( file_name != "oeCAmOD.jpg"){
-						fetch("download_link.txt", url~"\n"~path~"/"~to!string(c)~"_"~file_name );
-						std.net.curl.download( url, path~"/"~to!string(c)~"_"~file_name );	
-						c += 1;
+					// 우마루 로고 인장파일 제거
+					auto r1 = match( fileName, regex("[\\d_]*oeCAmOD.jpg"));
+					auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
+					
+					if( r1.empty && r2.empty ){
+						// 1~9는 01~09로 서식변경
+						import std.format;
+						auto wf = std.array.appender!string();
+						formattedWrite(wf, "%.2d",counter);
+						
+						path = path~"/";
+						fetch("download_link.txt", urlName~":"~path~wf.data~"_"~fileName );
+						std.net.curl.download( urlName, path~wf.data~"_"~fileName ); counter+=1;
 					}
 				}
 			}
 			else
-			{
-				fetch("matching_fail.txt", html);
-			}
+			{ fetch("matching_fail.txt", html); }
 		}
 	}
 
