@@ -372,7 +372,7 @@ class Cartoon{
 	//
 	// 파일 다운로드
 	//
-	private void fileDownload( string html, string path )
+	private void fileDownload( string html, string path, bool fix_a_filename )
 	{
 		string[] regex_patthens = [
 			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
@@ -390,20 +390,25 @@ class Cartoon{
 				foreach( element; match_result ){
 					string fileName = element[2];
 					string urlName = element[1];
+					string counter_str = "";
 
 					// 우마루 로고 인장파일 제거
 					auto r1 = match( fileName, regex("[\\d_]*oeCAmOD.jpg"));
 					auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
-					
 					if( r1.empty && r2.empty ){
+						
 						// 1~9는 01~09로 서식변경
-						import std.format;
-						auto wf = std.array.appender!string();
-						formattedWrite(wf, "%.2d",counter);
+						if(fix_a_filename)
+						{
+							import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter);
+							counter_str = wf.data;
+						}
+						else { counter_str = to!string(counter); }
 						
 						path = path~"/";
-						fetch("download_link.txt", urlName~":"~path~wf.data~"_"~fileName );
-						std.net.curl.download( urlName, path~wf.data~"_"~fileName ); counter+=1;
+
+						fetch("download_link.txt", urlName~":"~path~counter_str~"_"~fileName );
+						std.net.curl.download( urlName, path~counter_str~"_"~fileName ); counter+=1;
 					}
 				}
 			}
@@ -417,7 +422,7 @@ class Cartoon{
 	//
 	// 다운로드 실행
 	//
-	void download( string key, string path="." ){
+	void download( string key, bool fix_a_filename, string path=".",   ){
 		string[string][] list = getList();
 		foreach( element; list )
 		{
@@ -426,7 +431,7 @@ class Cartoon{
 				auto ghost = new Ghost( element[key] );
 				string html = ghost.Grab();
 				fetch( "body_ghost.txt", html );
-				fileDownload( html, path );
+				fileDownload( html, path, fix_a_filename );
 			}
 		}
 	}
