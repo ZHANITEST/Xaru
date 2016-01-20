@@ -60,23 +60,26 @@ class Ghost{
 	this( string url )
 	{
 		this.Url = url;
+		this.FileName = "phantomjs.exe";
 	}
 
 	bool hadTomb(){
-		if( std.file.exists("phantomjs.exe") )
+		if( std.file.exists(this.FileName) )
 		{
 			return true;
 		}
 		else
-			{ return false; }
+		{ return false; }
 	}
 
 	string Grab(){
 		File f = File("grab.js", "w");
-		f.write("var f = require('fs'); var webPage = require('webpage');var page = webPage.create(); page.open('"~this.Url~"', function(status) {setTimeout(function(){ console.log(page.content);phantom.exit();}, 10000);});");
+		f.write("var f = require('fs'); var webPage = require('webpage');var page = webPage.create(); page.open('"~this.Url~"', function(status) {setTimeout(function(){ console.log(page.content);phantom.exit();}, 30000);});");
 		f.close();
 
-		auto pid = pipeProcess(["phantomjs", "grab.js"]);
+		
+		auto pid = pipeProcess(["phantomjs", "grab.js"],Redirect.all,null,Config.suppressConsole);
+		//auto pid = pipeProcess(args=["phantomjs", "grab.js"]);
 		scope(exit) wait(pid.pid);
 
 		string result = "";
