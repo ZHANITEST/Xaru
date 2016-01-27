@@ -45,7 +45,7 @@ void makedir( string path ){
 //
 // 로그 작성(기본값:true)
 //
-const bool LOG_ENABLE = true;
+const bool LOG_ENABLE = false;
 
 
 
@@ -161,13 +161,18 @@ class MaruMaru{
 	//
 	// 검색
 	//
-	string[string][] search( string keyword ){
+	string[string][] search( string keyword, bool with_url=true ){
 		string[string][] result;
 		navigate("http://marumaru.in/?r=home&mod=search&keyword="~keyword~"&x=0&y=0");
-		string patthen = "<a href=\"/b/manga/([\\d]+)\" class=\"subject\">\n<table>\n<tr>\n<td>\n<span class=\"[\\S]+\"><img src=\"http://[\\dmarumarubp\\.blogspot]+\\.[incom]+.[quimagckrfles]+/[\\S]+\" width=\"[\\d]+\" height=\"[\\d]+\" alt=\"[\\S]*\"/></span>\n</td>\n<td>\n<div class=\"sbjbox\">\n<b>([\\S \\[\\]]+)</b>";
+		// 패턴매칭 서식
+		// [0]: 모든 문자열, [1]: /b/manga/ID, [2]: ID, [3]: 만화 제목
+		string patthen = "<a href=\"(\\/b\\/manga\\/([\\d]+))\" class=\"subject\">[\n<tablerd>]+<span class=\"thumb\">.+[\n<\\/tablerd>]+<div class=\"sbjbox\">\n<b>(.+)<\\/b>";
 		auto match_result = matchAll( this.HTML, regex(patthen) );
+
 		foreach( element; match_result ){
-			result ~= [ element[2]:element[1] ];
+			result ~= [
+				element[3] : with_url ? element[1]:element[2]
+			];
 		}
 		return result;
 	}
@@ -381,7 +386,8 @@ class Cartoon{
 			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
 			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
 			"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
-			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\""
+			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
+			"src=\"(http:\\/\\/[w\\.]*mangaumaru.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
 		];
 		uint counter = 0;
 		foreach( patthen; regex_patthens )
