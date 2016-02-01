@@ -122,8 +122,14 @@ enum Category{
 // GET method by cURL
 //
 string GET( string url ){
-	auto http = HTTP( url ); http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
-	return( cast(string)get(url, http) );
+	auto http = HTTP(url);
+	http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
+	string html;
+	try
+		{ html = cast(string)get(url, http); }
+	catch(CurlException e)
+		{ return e.msg; exit(0); }
+	return html;
 }
 
 
@@ -378,60 +384,9 @@ class Cartoon{
 
 
 	//
-	// 파일 다운로드
-	//
-	private void fileDownload( string html, string path, bool fix_a_filename )
-	{
-		string[] regex_patthens = [
-			"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
-			"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
-			"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
-			"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
-			"src=\"(http:\\/\\/[w\\.]*mangaumaru.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
-		];
-		uint counter = 0;
-		foreach( patthen; regex_patthens )
-		{
-			auto match_result = matchAll( html, regex(patthen) );
-			if( !(match_result.empty())  )
-			{
-				//string[][] result_array;
-				foreach( element; match_result ){
-					string fileName = element[2];
-					string urlName = element[1];
-					string counter_str = "";
-
-					// 우마루 로고 인장파일 제거
-					auto r1 = match( fileName, regex("[\\d_]*oeCAmOD.jpg"));
-					auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
-					if( r1.empty && r2.empty ){
-						
-						// 1~9는 01~09로 서식변경
-						if(fix_a_filename)
-						{
-							import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter);
-							counter_str = wf.data;
-						}
-						else { counter_str = to!string(counter); }
-						
-						path = path~"/";
-
-						fetch("download_link.txt", urlName~":"~path~counter_str~"_"~fileName );
-						std.net.curl.download( urlName, path~counter_str~"_"~fileName ); counter+=1;
-					}
-				}
-			}
-			else
-			{ fetch("matching_fail.txt", html); }
-		}
-	}
-
-
-
-	//
 	// 다운로드 실행
 	//
-	void download( string key, bool fix_a_filename, string path=".",   ){
+	void download( string key, string path=".", bool fix_name=true, bool cre_zip=false  ){
 		string[string][] list = getList();
 		foreach( element; list )
 		{
@@ -440,7 +395,92 @@ class Cartoon{
 				auto ghost = new Ghost( element[key] );
 				string html = ghost.Grab();
 				fetch( "body_ghost.txt", html );
-				fileDownload( html, path, fix_a_filename );
+				//fileDownload( html, path, fix_name );
+				string[] regex_patthens = [
+					"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
+					"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
+					"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
+					"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
+					"src=\"(http:\\/\\/[w\\.]*mangaumaru.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
+				];
+				uint counter = 0;
+				foreach( patthen; regex_patthens )
+				{
+					auto match_result = matchAll( html, regex(patthen) );
+					if( !(match_result.empty())  )
+					{
+						//string[][] result_array;
+						string[] member_path_list;
+						foreach( temp; match_result )
+						{
+							string fileName = temp[2];
+							string urlName = temp[1];
+							string counter_str = "";
+
+							// 우마루 로고 인장파일 제거
+							auto r1 = match( fileName, regex("[\\d_]*oeCAmOD.jpg"));
+							auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
+							if( r1.empty && r2.empty ){
+								
+								// [체크]-1~9는 01~09로 서식변경
+								if(fix_name)
+								{
+									import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter);
+									counter_str = wf.data;
+								}
+								else { counter_str = to!string(counter); }
+
+								string local_path = path~"/";
+								fetch("download_link.txt", urlName~":"~local_path~counter_str~"_"~fileName );
+								std.net.curl.download( urlName, local_path~counter_str~"_"~fileName ); counter+=1;
+
+								// 압축 리스트 작성
+								member_path_list ~= local_path~counter_str~"_"~fileName;
+							}
+						}
+						// [체크]-ZIP압축 여부
+						if( cre_zip )
+						{
+							// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
+							import std.array:split;
+							auto local_path_array = split(path, "/");
+							string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
+							
+							// 압축파일 생성 시작
+							import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
+							auto arch_obj = new ZipArchive();
+
+							foreach( member_path; member_path_list )
+							{
+								// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
+								if( exists(member_path) )
+								{
+									// 이미지 파일 읽기
+									auto member_file = File(member_path, "r+");
+									// 이미지 파일 크기만큼 byte 배열 생성
+									auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
+									// byte배열에 읽은 데이터를 담는다
+									member_file.rawRead(member_bytes);
+
+									// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
+									ArchiveMember member_obj = new ArchiveMember();
+									member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
+									member_obj.expandedData(member_bytes);
+									member_obj.compressionMethod(CompressionMethod.deflate);
+									
+									// 압축파일에 멤버 추가
+									arch_obj.addMember( member_obj );
+								}
+							}
+
+							// 최종 압축
+							void[] compressed_data = arch_obj.build();
+							std.file.write( path~"/"~arch_file_name, compressed_data);
+						}
+					}
+					else
+					{ fetch("matching_fail.txt", html); }
+				}
 			}
 		}
 	}
