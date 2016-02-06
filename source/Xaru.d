@@ -1,4 +1,4 @@
-﻿/*
+/*
 
 	Xaru.d
 	License: LGPL v2
@@ -46,6 +46,19 @@ void makedir( string path ){
 // 로그 작성(기본값:true)
 //
 const bool LOG_ENABLE = false;
+
+
+
+
+
+//
+// 유니크
+//
+string[] ezUniq(string[] ori)
+{
+	string[] fix; foreach( e; ori){ import std.algorithm.searching:canFind; if( !canFind(fix, e) ){ fix~=e; } } return fix;
+}
+
 
 
 
@@ -317,7 +330,7 @@ class Cartoon{
 		foreach( line; split_result)
 		{
 			string href, innerText;
-			auto obj = match( line, regex("href=\"[https]*://[w]*.mangaumaru.com/archives/[\\d]+") );
+			auto obj = match( line, regex("href=\"[https]*://[w]*.shencomics.com/archives/[\\d]+") );
 			if( !obj.empty() )
 			{
 				href = obj.front.hit();
@@ -343,7 +356,7 @@ class Cartoon{
 		string temp = stripHref();
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*shencomics.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 				{ result~= [ e[2]:e[1] ]; }
 		}
@@ -360,7 +373,7 @@ class Cartoon{
 		string temp = stripHref();
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*mangaumaru.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*shencomics.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 			{
 				string key, value;
@@ -396,13 +409,23 @@ class Cartoon{
 				string html = ghost.Grab();
 				fetch( "body_ghost.txt", html );
 				//fileDownload( html, path, fix_name );
+
+				//string[] regex_patthens = [
+				//	"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
+				//	"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
+				//	"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
+				//	"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
+				//	"src=\"(http:\\/\\/[w\\.]*shencomics.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
+				//];
+
 				string[] regex_patthens = [
-					"src=\"(http://[w\\.]*mangaumaru.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
-					"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
-					"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
-					"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
-					"src=\"(http:\\/\\/[w\\.]*mangaumaru.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
+					"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[jpeng]{3,4}[\\?\\d]*)\"",
+					"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"",
+					"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"", // href와 src 분리
+					"src=\"(http://i.imgur.com/[\\S]+\\.[jpneg]{3,4})[%\\d]*\"",
+					"src=\"(http:\\/\\/[w\\.]*shencomics.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/[\\S]+\\.[jpeng]{3,4}[\?\\d]*)"
 				];
+
 				uint counter = 0;
 				foreach( patthen; regex_patthens )
 				{
@@ -411,6 +434,9 @@ class Cartoon{
 					{
 						//string[][] result_array;
 						string[] member_path_list;
+						string[] file_url_list = [];
+
+						/*
 						foreach( temp; match_result )
 						{
 							string fileName = temp[2];
@@ -422,22 +448,70 @@ class Cartoon{
 							auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
 							if( r1.empty && r2.empty ){
 								
-								// [체크]-1~9는 01~09로 서식변경
-								if(fix_name)
-								{
-									import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter);
-									counter_str = wf.data;
-								}
-								else { counter_str = to!string(counter); }
 
-								string local_path = path~"/";
-								fetch("download_link.txt", urlName~":"~local_path~counter_str~"_"~fileName );
-								std.net.curl.download( urlName, local_path~counter_str~"_"~fileName ); counter+=1;
+							}
+						}*/
 
-								// 압축 리스트 작성
-								member_path_list ~= local_path~counter_str~"_"~fileName;
+						// 다운로드 받을 url 리스트 생성(중복과 인장 제거)
+						foreach( temp; match_result )
+						{
+							
+							import std.algorithm.searching:canFind;
+							string url = temp[1];
+							
+							// 우마루 인장은 리스트에 넣지 않는다
+							if( !canFind( url, "우마루세로") && !canFind( url, "oeCAmOD.jpg") )
+							{
+								file_url_list ~= url;
 							}
 						}
+
+						// 중복제거
+						file_url_list = ezUniq(file_url_list);
+
+						// 다운로드 작업 시작
+						uint counter_num = 0;
+						foreach( file_url; file_url_list )
+						{
+							// url상에서 파일이름만 추출
+							import std.array:split;
+							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
+							
+							// 파일이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?부터 지운다
+							if( file_name.indexOf("?") != -1 ){
+								file_name = replaceAll( file_name, regex("\\?[\\d]+"), "");
+							}
+
+							auto file_name_verfiy_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
+							if( !file_name_verfiy_match.empty() )
+							{
+								// [체크]-1~9는 01~09로 서식변경
+								string counter_str;
+								
+								if(fix_name)
+								{
+									import std.format;
+									auto wf = std.array.appender!string();
+									formattedWrite(wf, "%.2d",counter_num);
+									counter_str = wf.data; counter_num+=1;
+								}
+								else
+									{ counter_str = to!string(counter_num); }
+								
+
+								string local_path = path~"/";
+								file_name = replace(file_name, "/", "");
+								fetch("download_link.txt", file_url~":"~local_path~counter_str~"_"~file_name );
+								std.net.curl.download( file_url, local_path~counter_str~"_"~file_name ); counter+=1;
+
+								// 압축 리스트 작성
+								member_path_list ~= local_path~counter_str~"_"~file_name;		
+							}
+
+						}
+
+
+
 						// [체크]-ZIP압축 여부
 						if( cre_zip )
 						{
