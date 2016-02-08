@@ -45,7 +45,7 @@ void makedir( string path ){
 //
 // 로그 작성(기본값:true)
 //
-const bool LOG_ENABLE = false;
+const bool LOG_ENABLE = true;
 
 
 
@@ -317,33 +317,55 @@ class Cartoon{
 	// <a href~ 스타일로 코드 새로 작성
 	//
 	string stripHref(){
-		//auto document = new Document();
+		// 실제 콘텐츠 부분만 따옴
 		string temp = stripBody();
 		fetch( "stripBody.txt", temp );
-		string body_;
-		temp = replaceAll( temp, regex("><a "), ">\n<a ");
-		temp = replaceAll( temp, regex("</[^a][font]*>"), "");
-		temp = replaceAll( temp, regex("</[^a][span]*>"), "");
-		temp = replaceAll( temp, regex(" *&nbsp; *"), "");
-		temp = replaceAll( temp, regex("><a "), ">\n<a ");
+		string stripHref;
+		
+		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움
+		string[] target_lsit = [
+			"><a ",
+			"</[^a][font]*>",
+			"</[^a][span]*>",
+			" *&nbsp; *",
+			"><a "
+		];
+		string[] replace_list = [
+			">\n<a ",
+			"", "", "",
+			">\n<a "
+		];
+
+		for( int i; i <= target_lsit.length-1; i++ )
+		{
+			temp = replaceAll( temp, regex(target_lsit[i]), replace_list[i]);
+		}
 		string[] split_result = split(temp, regex("\n") );
+
 		foreach( line; split_result)
 		{
 			string href, innerText;
 			auto obj = match( line, regex("href=\"[https]*://[w]*.shencomics.com/archives/[\\d]+") );
 			if( !obj.empty() )
 			{
-				href = obj.front.hit();
-				fetch( "href.txt", href );
+				href = obj.front.hit(); fetch( "stripHref_href.txt", href );
 				auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
-				foreach( e; obj2 ){ innerText = e[1]; }
-				fetch( "href2.txt", innerText );
-				body_ ~= "<a "~href~"\">"~innerText~"</a>\n";
+				foreach( e; obj2 ){
+					innerText = e[1];
+					// ">만화 <font~~> 3권<a href=" 같이 태그가 덜 지워진 경우 안에서 또 지우는 작업 시작
+					if( innerText.indexOf("<") != -1 )
+					{
+						// span, font 태그에 대해서 한번에 지우는 패턴!
+						innerText = replaceAll( innerText, regex("<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+>"), "" );
+					}
+				}
+				fetch( "stripHref_innerText.txt", innerText );
+				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";
 			}
 			
 		}
-		fetch( "body_.txt", body_ );
-		return body_;
+		fetch( "stripHref_stripHref.txt", stripHref );
+		return stripHref;
 	}
 
 
