@@ -24,6 +24,15 @@ import arsd.dom; // dom parser
 
 
 
+//
+// 로그 작성(기본값:true)
+//
+const bool LOG_ENABLE = false;
+
+
+
+
+
 // 카테고리 리스트
 string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
 
@@ -37,15 +46,6 @@ string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정�
 void makedir( string path ){
 		if( !exists(path) ){ mkdir(path); }
 }
-
-
-
-
-
-//
-// 로그 작성(기본값:true)
-//
-const bool LOG_ENABLE = true;
 
 
 
@@ -135,11 +135,11 @@ enum Category{
 // GET method by cURL
 //
 string GET( string url ){
-	auto http = HTTP(url);
-	http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
+	//auto http = HTTP(url);
+	//http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
 	string html;
 	try
-		{ html = cast(string)get(url, http); }
+		{ html = cast(string)get(url); } //{ html = cast(string)get(url, http); }
 	catch(CurlException e)
 		{ return e.msg; exit(0); }
 	return html;
@@ -387,6 +387,7 @@ class Cartoon{
 	}
 
 
+
 	//
 	// ~화:링크 얻기(연관배열 스타일로)
 	//
@@ -405,16 +406,6 @@ class Cartoon{
 		}
 		return result;
 	}
-	
-
-
-	//
-	// 디렉토리 만들기
-	//
-	/*private void makedir( string path ){
-		string path_real = stripSpecialChars(path);
-		if( !exists(path_real) ){ mkdir(path_real); }
-	}*/
 
 
 
@@ -430,7 +421,6 @@ class Cartoon{
 				auto ghost = new Ghost( element[key] );
 				string html = ghost.Grab();
 				fetch( "body_ghost.txt", html );
-				//fileDownload( html, path, fix_name );
 
 				//string[] regex_patthens = [
 				//	"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
@@ -443,9 +433,9 @@ class Cartoon{
 				string[] regex_patthens = [
 					"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[jpeng]{3,4}[\\?\\d]*)\"",
 					"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"",
-					"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"", // href와 src 분리
+					"href=\"(http[s]*://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"", // href와 src 분리
 					"src=\"(http://i.imgur.com/[\\S]+\\.[jpneg]{3,4})[%\\d]*\"",
-					"src=\"(http:\\/\\/[w\\.]*shencomics.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/[\\S]+\\.[jpeng]{3,4}[\?\\d]*)"
+					"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d/]+/[\\S]+\\.[jpeng]{3,4}[\?\\d]*)"
 				];
 
 				uint counter = 0;
@@ -458,22 +448,6 @@ class Cartoon{
 						string[] member_path_list;
 						string[] file_url_list = [];
 
-						/*
-						foreach( temp; match_result )
-						{
-							string fileName = temp[2];
-							string urlName = temp[1];
-							string counter_str = "";
-
-							// 우마루 로고 인장파일 제거
-							auto r1 = match( fileName, regex("[\\d_]*oeCAmOD.jpg"));
-							auto r2 = match( fileName, regex("[\\d_]*우마루세로[\\d]-[\\dx]+.jpg"));
-							if( r1.empty && r2.empty ){
-								
-
-							}
-						}*/
-
 						// 다운로드 받을 url 리스트 생성(중복과 인장 제거)
 						foreach( temp; match_result )
 						{
@@ -484,6 +458,10 @@ class Cartoon{
 							// 우마루 인장은 리스트에 넣지 않는다
 							if( !canFind( url, "우마루세로") && !canFind( url, "oeCAmOD.jpg") )
 							{
+								// (n).dp.blogspot.com의 https를 http로 우회한다. 에효...
+								url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://4.bp.blogspot.com");
+								
+								// 최종적으로 리스트에 추가
 								file_url_list ~= url;
 							}
 						}
@@ -491,18 +469,30 @@ class Cartoon{
 						// 중복제거
 						file_url_list = ezUniq(file_url_list);
 
+						// 다운로드 작업 시작 전에 폴더를 경건하게 비우고 시작한다
+						//import std.file:dirEntries, SpanMode, remove;
+						//foreach( e; dirEntries(path, "*.*", SpanMode.shallow) ) { remove(e); }
+
 						// 다운로드 작업 시작
 						uint counter_num = 0;
 						foreach( file_url; file_url_list )
 						{
+							// 파일이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?부터 지운다.
+							if( file_url.indexOf("?") != -1 )
+								{ file_url = replaceAll( file_url, regex("\\?[\\d]+"), ""); }
+
 							// url상에서 파일이름만 추출
 							import std.array:split;
+							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
+
+							/*
 							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
 							
 							// 파일이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?부터 지운다
 							if( file_name.indexOf("?") != -1 ){
 								file_name = replaceAll( file_name, regex("\\?[\\d]+"), "");
-							}
+							}*/
+
 
 							auto file_name_verfiy_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
 							if( !file_name_verfiy_match.empty() )
@@ -542,30 +532,39 @@ class Cartoon{
 							auto local_path_array = split(path, "/");
 							string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
 							
+							//member_path_list=[];
+							//foreach( e;  dirEntries(path, "*.{pn,jpe,jp}g", SpanMode.shallow, false) ){ member_path_list~=e; }
+
 							// 압축파일 생성 시작
 							import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
 							auto arch_obj = new ZipArchive();
 
 							foreach( member_path; member_path_list )
 							{
-								// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
-								if( exists(member_path) )
+								uint temp_uint = 0;
+								while( member_path_list.length != temp_uint )
 								{
-									// 이미지 파일 읽기
-									auto member_file = File(member_path, "r+");
-									// 이미지 파일 크기만큼 byte 배열 생성
-									auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
-									// byte배열에 읽은 데이터를 담는다
-									member_file.rawRead(member_bytes);
+									// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
+									if( exists(member_path) )
+									{
+										temp_uint+=1;
+										// 이미지 파일 읽기
+										auto member_file = File(member_path, "r+");
+										// 이미지 파일 크기만큼 byte 배열 생성
+										auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
+										// byte배열에 읽은 데이터를 담는다
+										member_file.rawRead(member_bytes);
 
-									// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
-									ArchiveMember member_obj = new ArchiveMember();
-									member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
-									member_obj.expandedData(member_bytes);
-									member_obj.compressionMethod(CompressionMethod.deflate);
-									
-									// 압축파일에 멤버 추가
-									arch_obj.addMember( member_obj );
+										// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
+										ArchiveMember member_obj = new ArchiveMember();
+										member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
+										member_obj.expandedData(member_bytes);
+										member_obj.compressionMethod(CompressionMethod.deflate);
+										
+										// 압축파일에 멤버 추가
+
+										arch_obj.addMember( member_obj );
+									}
 								}
 							}
 
