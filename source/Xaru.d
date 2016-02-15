@@ -18,7 +18,7 @@ import std.string:indexOf;
 import std.file;
 import std.process;
 import std.array:replace;
-import arsd.dom; // dom parser
+//import arsd.dom; // dom parser
 
 
 
@@ -102,6 +102,19 @@ class Ghost{
 		//std.file.remove("grab.js");
 		return result;
 	}
+}
+
+
+
+
+
+//
+// CartoonType
+//
+enum CartoonType{
+	MANGA,
+	MANGAUP,
+	AUTO
 }
 
 
@@ -240,18 +253,31 @@ class MaruMaru{
 class Cartoon{
 	private string ID;
 	private string HTML;
+	private CartoonType TYPE;
 
 
 
 	//
 	// 생성자
 	//
-	this( string id ){
+	this( string id, CartoonType type = CartoonType.AUTO ){
 		this.ID = id;
-		this.HTML = GET( "http://marumaru.in/b/manga/"~this.ID );
-		if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
-			throw new Exception("Can't not open http://marumaru.in/b/manga/"~id);
+		string temp;
+
+		// 해당 ID에 대한 URL 지정
+		if( type == CartoonType.AUTO ){
+			temp = "magaup";
+			this.TYPE = CartoonType.AUTO;
 		}
+
+		if( type == CartoonType.MANGA )		{ temp = "manga"; this.TYPE = CartoonType.MANGA; }
+		if( type == CartoonType.MANGAUP ) 	{ temp = "mangaup"; this.TYPE = CartoonType.MANGAUP; }
+		
+		this.HTML = GET( "http://marumaru.in/b/"~temp~"/"~this.ID );
+		if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
+			throw new Exception("해당 만화를 파싱할 수 없습니다.(Can't not open http://marumaru.in/b/"~temp~"/"~id~")");
+		}
+		fetch("CCartoonThis_HTML_TYPE", temp~"\n\n\n"~this.HTML);
 	}
 
 
@@ -260,9 +286,102 @@ class Cartoon{
 	// 본문만 따오기(vContent)
 	//
 	private string stripBody(){
-		uint x = this.HTML.indexOf( "<div id=\"vContent\" class=\"content\">" ) + "<div id=\"vContent\" class=\"content\">".length;
-		uint y = this.HTML.indexOf( "<div align=\"center\">\n<center>" );
-		return( this.HTML[x..y] );
+		string start_tag, end_tag;
+		if( this.TYPE == CartoonType.MANGA )
+		{
+			start_tag = "<div id=\"vContent\" class=\"content\">"; end_tag = "<div align=\"center\">";			
+		}
+		if( this.TYPE == CartoonType.MANGAUP )
+		{
+			start_tag = "<div class=\"ctt_box\">"; end_tag = "<div align=\"center\">";
+		}
+		if( this.TYPE == CartoonType.AUTO )
+		{
+			// ctt_box의 경우 mangaup에만 존재함
+			if( this.HTML.indexOf("<div class=\"ctt_box\">") != -1 ){ start_tag = "<div class=\"ctt_box\">"; end_tag = "<div align=\"center\">"; }
+			if( this.HTML.indexOf("<div class=\"ctt_box\">") == -1 ){ start_tag = "<div id=\"vContent\" class=\"content\">"; end_tag = "<div align=\"center\">";	 }
+		}
+
+		uint x = this.HTML.indexOf(start_tag) + start_tag.length;
+		uint y = this.HTML[x..this.HTML.length].indexOf( end_tag );
+
+		return this.HTML[x..x+y];
+	}
+
+
+
+
+
+
+	//
+	// <a href~ 스타일로 코드 새로 작성
+	//
+	string stripHref(){
+		// 실제 콘텐츠 부분만 따옴
+		string temp = stripBody();
+		fetch( "stripBody.txt", temp );
+		string stripHref;
+		
+		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움
+		
+		/*
+		string[] target_lsit = [
+			"><a ",
+			"</[^a][spanfont]*>",
+			" *&nbsp; *",
+			"><a "
+		];
+		string[] replace_list = [
+			">\n<a ",
+			"", "", "",
+			">\n<a "
+		];*/
+		string[] target_lsit = [
+			"><a ",
+			"</[^a][spanfont]*>",
+			" *&nbsp; *",
+			"<font [sizetyl]+=\".+\">",
+			"><a "
+		];
+		string[] replace_list = [
+			">\n<a ",
+			"",
+			"",
+			"",
+			">\n<a "
+		];
+
+		for( int i; i <= target_lsit.length-1; i++ )
+		{
+			temp = replaceAll( temp, regex(target_lsit[i]), replace_list[i]);
+		}
+		string[] split_result = split(temp, regex("\n") );
+
+		foreach( line; split_result)
+		{
+			string href, innerText;
+			auto obj = match( line, regex("href=\"http://[w]*.shencomics.com/archives/[\\d]+") );
+			if( !obj.empty() )
+			{
+				href = obj.front.hit(); fetch( "stripHref_href.txt", href );
+				auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
+				foreach( e; obj2 ){
+					innerText = e[1];
+					// ">만화 <font~~> 3권<a href=" 같이 태그가 덜 지워진 경우 안에서 또 지우는 작업 시작
+					if( innerText.indexOf("<") != -1 )
+					{
+						// span, font 태그에 대해서 한번에 지우는 패턴!
+						innerText = replaceAll( innerText, regex(" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *"), "" );
+						// *<span [\D-]+> *
+					}
+				}
+				fetch( "stripHref_innerText.txt", innerText );
+				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";
+			}
+			
+		}
+		fetch( "stripHref_stripHref.txt", stripHref );
+		return stripHref;
 	}
 
 
@@ -306,66 +425,16 @@ class Cartoon{
 	// 만화제목 얻기
 	//
 	string getTitle(){
-		auto result = match( this.HTML, regex(r"<h1>(.+)<\/h1>") ); string a;
-		foreach( temp; result ) { a = temp[1]; }
-		return a;
-	}
+		auto result = match( this.HTML, regex(r"<h1>(.+)<\/h1>") );
+		string temp;
+		foreach( e; result ) { temp = e[1]; }
 
-
-
-	//
-	// <a href~ 스타일로 코드 새로 작성
-	//
-	string stripHref(){
-		// 실제 콘텐츠 부분만 따옴
-		string temp = stripBody();
-		fetch( "stripBody.txt", temp );
-		string stripHref;
-		
-		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움
-		string[] target_lsit = [
-			"><a ",
-			"</[^a][font]*>",
-			"</[^a][span]*>",
-			" *&nbsp; *",
-			"><a "
-		];
-		string[] replace_list = [
-			">\n<a ",
-			"", "", "",
-			">\n<a "
-		];
-
-		for( int i; i <= target_lsit.length-1; i++ )
+		// <h1>~</h1> 태그 안에 또다른 태그가 존재한다면,
+		if( temp.indexOf("<") != -1 || temp.indexOf(">") != -1 )
 		{
-			temp = replaceAll( temp, regex(target_lsit[i]), replace_list[i]);
+			temp = replaceAll( temp, regex(" *</*[fontspa]+ *[stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]*> *"), "" );
 		}
-		string[] split_result = split(temp, regex("\n") );
-
-		foreach( line; split_result)
-		{
-			string href, innerText;
-			auto obj = match( line, regex("href=\"[https]*://[w]*.shencomics.com/archives/[\\d]+") );
-			if( !obj.empty() )
-			{
-				href = obj.front.hit(); fetch( "stripHref_href.txt", href );
-				auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
-				foreach( e; obj2 ){
-					innerText = e[1];
-					// ">만화 <font~~> 3권<a href=" 같이 태그가 덜 지워진 경우 안에서 또 지우는 작업 시작
-					if( innerText.indexOf("<") != -1 )
-					{
-						// span, font 태그에 대해서 한번에 지우는 패턴!
-						innerText = replaceAll( innerText, regex("<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+>"), "" );
-					}
-				}
-				fetch( "stripHref_innerText.txt", innerText );
-				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";
-			}
-			
-		}
-		fetch( "stripHref_stripHref.txt", stripHref );
-		return stripHref;
+		return temp;
 	}
 
 
@@ -412,7 +481,8 @@ class Cartoon{
 	//
 	// 다운로드 실행
 	//
-	void download( string key, string path=".", bool fix_name=true, bool cre_zip=false  ){
+	void download( string key, string path=".", bool fix_name=true, bool cre_zip=false )
+	{
 		string[string][] list = getList();
 		foreach( element; list )
 		{
@@ -485,15 +555,6 @@ class Cartoon{
 							import std.array:split;
 							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
 
-							/*
-							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
-							
-							// 파일이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?부터 지운다
-							if( file_name.indexOf("?") != -1 ){
-								file_name = replaceAll( file_name, regex("\\?[\\d]+"), "");
-							}*/
-
-
 							auto file_name_verfiy_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
 							if( !file_name_verfiy_match.empty() )
 							{
@@ -521,9 +582,7 @@ class Cartoon{
 							}
 
 						}
-
-
-
+						
 						// [체크]-ZIP압축 여부
 						if( cre_zip )
 						{
