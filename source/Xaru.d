@@ -555,8 +555,8 @@ class Cartoon{
 							import std.array:split;
 							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
 
-							auto file_name_verfiy_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
-							if( !file_name_verfiy_match.empty() )
+							auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
+							if( !file_name_verify_match.empty() )
 							{
 								// [체크]-1~9는 01~09로 서식변경
 								string counter_str;
@@ -578,7 +578,19 @@ class Cartoon{
 								std.net.curl.download( file_url, local_path~counter_str~"_"~file_name ); counter+=1;
 
 								// 압축 리스트 작성
-								member_path_list ~= local_path~counter_str~"_"~file_name;		
+								member_path_list ~= local_path~counter_str~"_"~file_name;
+
+								// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
+								ushort byte_verify = 10000;
+								if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
+								{
+									// '? + 랜덤 5자리' 생성
+									import std.random:randomSample;
+									string tail = "?";
+									foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5))
+										{ tail ~= std.conv.to!string(e); }
+									std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
+								}
 							}
 
 						}
