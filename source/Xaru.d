@@ -52,11 +52,40 @@ void makedir( string path ){
 
 
 //
+// 로그
+//
+void log( string file_name, string[] obj ){
+	File f = File(file_name, "w");
+	//f.writeln( obj.stringOf()~"\n" );
+	foreach( e; obj )
+	{
+		f.writeln(e);
+	}
+	f.close();
+}
+
+
+
+
+
+//
 // 유니크
 //
 string[] ezUniq(string[] ori)
 {
-	string[] fix; foreach( e; ori){ import std.algorithm.searching:canFind; if( !canFind(fix, e) ){ fix~=e; } } return fix;
+	string[] fix; foreach( e; ori ){ import std.algorithm.searching:canFind; if( !canFind(fix, e) ){ fix~=e; } } return fix;
+}
+
+
+
+
+
+//
+// 필터
+//
+string[] ezFilter( string[] array, string keyword )
+{
+	string[] temp = []; if(array.length>0){ foreach( e; array) { if( indexOf(e, keyword)== -1 ){temp~=e;} } } return temp;
 }
 
 
@@ -70,10 +99,12 @@ class Ghost{
 	public string Url;
 	public string FileName;
 
-	this( string url )
+	this( string url, string os="windows" )
 	{
+		string ext="";
 		this.Url = url;
-		this.FileName = "phantomjs.exe";
+		if( os == "windows"){ ext = ".exe";}
+		this.FileName = "phantomjs"~ext;
 	}
 
 	bool hadTomb(){
@@ -254,6 +285,7 @@ class Cartoon{
 	private string ID;
 	private string HTML;
 	private CartoonType TYPE;
+	public string URL;
 
 
 
@@ -266,16 +298,30 @@ class Cartoon{
 
 		// 해당 ID에 대한 URL 지정
 		if( type == CartoonType.AUTO ){
-			temp = "magaup";
+			temp = "manga";
 			this.TYPE = CartoonType.AUTO;
 		}
 
 		if( type == CartoonType.MANGA )		{ temp = "manga"; this.TYPE = CartoonType.MANGA; }
 		if( type == CartoonType.MANGAUP ) 	{ temp = "mangaup"; this.TYPE = CartoonType.MANGAUP; }
 		
-		this.HTML = GET( "http://marumaru.in/b/"~temp~"/"~this.ID );
-		if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
-			throw new Exception("해당 만화를 파싱할 수 없습니다.(Can't not open http://marumaru.in/b/"~temp~"/"~id~")");
+		try
+		{
+			this.URL="http://marumaru.in/b/"~temp~"/"~this.ID;
+			this.HTML = GET(this.URL);
+		}
+		catch( std.net.curl.CurlException e )
+		{
+			if( temp == "magnaup")
+				{ this.URL="http://marumaru.in/b/manga/"~this.ID; this.HTML = GET(this.URL); }
+			else if( temp == "manga")
+				{ this.URL="http://marumaru.in/b/mangaup/"~this.ID; this.HTML = GET(this.URL);  }
+		}
+		finally
+		{
+			if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
+				throw new Exception("해당 만화의 HTML를 잃어올 수 없습니다. 마루마루 사이트 자체의 문제인지 확인해보시고 다시 시도해주세요.\n(Can't not open http://marumaru.in/b/"~temp~"/"~id~")\n==================================================\n참조:\n"~this.HTML);
+			}
 		}
 		fetch("CCartoonThis_HTML_TYPE", temp~"\n\n\n"~this.HTML);
 	}
@@ -310,9 +356,6 @@ class Cartoon{
 
 
 
-
-
-
 	//
 	// <a href~ 스타일로 코드 새로 작성
 	//
@@ -323,28 +366,17 @@ class Cartoon{
 		string stripHref;
 		
 		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움
-		
-		/*
 		string[] target_lsit = [
 			"><a ",
 			"</[^a][spanfont]*>",
 			" *&nbsp; *",
-			"><a "
-		];
-		string[] replace_list = [
-			">\n<a ",
-			"", "", "",
-			">\n<a "
-		];*/
-		string[] target_lsit = [
-			"><a ",
-			"</[^a][spanfont]*>",
-			" *&nbsp; *",
+			" *amp; *",
 			"<font [sizetyl]+=\".+\">",
 			"><a "
 		];
 		string[] replace_list = [
 			">\n<a ",
+			"",
 			"",
 			"",
 			"",
@@ -481,131 +513,101 @@ class Cartoon{
 	//
 	// 다운로드 실행
 	//
-	void download( string key, string path=".", bool fix_name=true, bool cre_zip=false )
+	void download( string chapter_name, string path=".", bool fix_name=true, bool cre_zip=false )
 	{
 		string[string][] list = getList();
+		string[] regex_patthens = [
+			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
+			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
+			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d/]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\?\\d]*)",
+			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\""
+		];
+		string[] file_url_list = [];
+		string[] member_path_list = [];
+
 		foreach( element; list )
 		{
-			if( element.keys[0] == key )
+			// 입력 받은 챕터와 리스트의 챕터가 같으면 다운받음. else없음.
+			if( element.keys[0] == chapter_name )
 			{
-				auto ghost = new Ghost( element[key] );
-				string html = ghost.Grab();
-				fetch( "body_ghost.txt", html );
-
-				//string[] regex_patthens = [
-				//	"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/([\\S]+\\.[jpeng]{3,4})[\\?\\d]*)\"",
-				//	"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"",
-				//	"href=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/([\\S]+\\.[jpneg]{3,4}))\"", // href와 src 분리
-				//	"src=\"(http://i.imgur.com/([\\S]+\\.[jpneg]{3,4}))[%\\d]*\"",
-				//	"src=\"(http:\\/\\/[w\\.]*shencomics.com\\/wp-content\\/upload[s]*\\/[\\d/]+\\/([\\S]+\\.[jpeng]{3,4})[\?\\d]*)"
-				//];
-
-				string[] regex_patthens = [
-					"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[jpeng]{3,4}[\\?\\d]*)\"",
-					"src=\"(http://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"",
-					"href=\"(http[s]*://[\\d]+.bp.blogspot.com/[\\S]+/[\\S]+\\.[jpneg]{3,4})\"", // href와 src 분리
-					"src=\"(http://i.imgur.com/[\\S]+\\.[jpneg]{3,4})[%\\d]*\"",
-					"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d/]+/[\\S]+\\.[jpeng]{3,4}[\?\\d]*)"
-				];
-
-				uint counter = 0;
+				// phantomjs로 js가포함된 웹페이지 html 얻어오기
+				auto ghost = new Ghost( element[chapter_name] ); string html = ghost.Grab();
+				fetch( "download_GhostHtml.txt", html );
+				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
 				foreach( patthen; regex_patthens )
 				{
+					// url들.
 					auto match_result = matchAll( html, regex(patthen) );
 					if( !(match_result.empty())  )
 					{
-						//string[][] result_array;
-						string[] member_path_list;
-						string[] file_url_list = [];
-
-						// 다운로드 받을 url 리스트 생성(중복과 인장 제거)
+						// regex에 검색된 이미지 파일 하나하나씩 인장인지 확인하고 아닐 경우만 다운리스트에 추가
 						foreach( temp; match_result )
 						{
-							
-							import std.algorithm.searching:canFind;
+							// src="url", url 에서 url만 따온다
 							string url = temp[1];
-							
-							// 우마루 인장은 리스트에 넣지 않는다
-							if( !canFind( url, "우마루세로") && !canFind( url, "oeCAmOD.jpg") )
-							{
-								// (n).dp.blogspot.com의 https를 http로 우회한다. 에효...
-								url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://4.bp.blogspot.com");
-								
-								// 최종적으로 리스트에 추가
-								file_url_list ~= url;
-							}
+
+							// 이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?~ 부분 삭제
+							if( url.indexOf("?") != -1 ) { url = replaceAll( url, regex("\\?[\\d]+"), ""); }
+							// 만약 (n).dp.blogspot.com에서 https라면 http로 변경
+							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com"); file_url_list ~= url;
 						}
+					}
+				}
+				//log("file_url_list.txt", file_url_list);
+				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
+				if( file_url_list.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("URL리스트 생성에 실패했습니다."); }
 
-						// 중복제거
-						file_url_list = ezUniq(file_url_list);
+				// 리스트에서 중복항목을 제거
+				file_url_list = ezUniq(file_url_list);
+				
+				// 리스트에서 마루마루 관련 인장 제거
+				file_url_list = ezFilter(file_url_list, "우마루세로");
+				file_url_list = ezFilter(file_url_list, "oeCAmOD");
 
-						// 다운로드 작업 시작 전에 폴더를 경건하게 비우고 시작한다
-						//import std.file:dirEntries, SpanMode, remove;
-						//foreach( e; dirEntries(path, "*.*", SpanMode.shallow) ) { remove(e); }
+				// 다운로드 작업 시작
+				uint counter_num = 0;
+				foreach( file_url; file_url_list )
+				{
+					// url상에서 파일이름만 추출
+					string file_name;
+					import std.array:split; file_name=file_url.split("/")[ file_url.split("/").length-1 ];
 
-						// 다운로드 작업 시작
-						uint counter_num = 0;
-						foreach( file_url; file_url_list )
-						{
-							// 파일이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?부터 지운다.
-							if( file_url.indexOf("?") != -1 )
-								{ file_url = replaceAll( file_url, regex("\\?[\\d]+"), ""); }
-
-							// url상에서 파일이름만 추출
-							import std.array:split;
-							string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
-
-							auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[jpneg]{3,4}") );
-							if( !file_name_verify_match.empty() )
-							{
-								// [체크]-1~9는 01~09로 서식변경
-								string counter_str;
-								
-								if(fix_name)
-								{
-									import std.format;
-									auto wf = std.array.appender!string();
-									formattedWrite(wf, "%.2d",counter_num);
-									counter_str = wf.data; counter_num+=1;
-								}
-								else
-									{ counter_str = to!string(counter_num); }
-								
-
-								string local_path = path~"/";
-								file_name = replace(file_name, "/", "");
-								fetch("download_link.txt", file_url~":"~local_path~counter_str~"_"~file_name );
-								std.net.curl.download( file_url, local_path~counter_str~"_"~file_name ); counter+=1;
-
-								// 압축 리스트 작성
-								member_path_list ~= local_path~counter_str~"_"~file_name;
-
-								// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
-								ushort byte_verify = 10000;
-								if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
-								{
-									// '? + 랜덤 5자리' 생성
-									import std.random:randomSample;
-									string tail = "?";
-									foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5))
-										{ tail ~= std.conv.to!string(e); }
-									std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
-								}
-							}
-
-						}
+					// 추출된 파일이름 검증
+					auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[JjPpEeNnGg]{3,4}") );
+					if( !file_name_verify_match.empty() )
+					{
+						// [체크]-1~9는 01~09로 서식변경
 						
-						// [체크]-ZIP압축 여부
+						string counter_str = "";		
+						if(fix_name)
+						{ import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter_num); counter_str = wf.data; counter_num+=1; }
+								
+						// 다운로드 시작
+						string local_path = path~"/";
+						file_name = replace(file_name, "/", "");
+						fetch("download_urls.txt", file_url~":"~local_path~counter_str~"_"~file_name );
+						std.net.curl.download( file_url, local_path~counter_str~"_"~file_name );
+
+						// 압축 리스트 작성
+						member_path_list ~= local_path~counter_str~"_"~file_name;
+
+						// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
+						ushort byte_verify = 10000;
+						if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
+						{
+							// '? + 랜덤 5자리' 생성
+							import std.random:randomSample; string tail = "?";
+							foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
+							std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
+						}
+
+
 						if( cre_zip )
 						{
 							// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
-							import std.array:split;
 							auto local_path_array = split(path, "/");
 							string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
 							
-							//member_path_list=[];
-							//foreach( e;  dirEntries(path, "*.{pn,jpe,jp}g", SpanMode.shallow, false) ){ member_path_list~=e; }
-
 							// 압축파일 생성 시작
 							import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
 							auto arch_obj = new ZipArchive();
@@ -633,21 +635,20 @@ class Cartoon{
 										member_obj.compressionMethod(CompressionMethod.deflate);
 										
 										// 압축파일에 멤버 추가
-
 										arch_obj.addMember( member_obj );
 									}
 								}
 							}
-
 							// 최종 압축
 							void[] compressed_data = arch_obj.build();
 							std.file.write( path~"/"~arch_file_name, compressed_data);
 						}
 					}
-					else
-					{ fetch("matching_fail.txt", html); }
+					// 추출된 파일이름 검증에 실패한다면,
+					else { throw new Error("URL 상에서의 파일이름 검증에 실패했습니다."); }
 				}
-			}
+
+			} 
 		}
 	}
 }
