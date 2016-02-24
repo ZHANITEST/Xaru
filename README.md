@@ -1,5 +1,4 @@
 # Xaru
-API for "http://marumaru.in".
 순수하게 D 프로그래밍 언어와 표준라이브러리(phobos)로만 작성된 파서 입니다. 거의 모든 것이 Regex로 이루어져있습니다.
 
 
