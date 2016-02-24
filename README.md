@@ -1,17 +1,12 @@
 # Xaru
 API for "http://marumaru.in".
-
-  1. 순수하게 D언어와 표준라이브러리(phobos)로 작성되었습니다.
-  2. 오픈소스(LGPL v2)입니다.
-  3. 제대로 된 HTML파서 없이 Regex 땜질로 이루어져있습니다.
+순수하게 D 프로그래밍 언어와 표준라이브러리(phobos)로만 작성된 파서 입니다. 거의 모든 것이 Regex로 이루어져있습니다.
 
 
 
 # License
-  1. Boost v1.0(arsd.*)
-  2. LGPL v2.1(xaru)
-
-..or with BSD(phantomJS)
+ * LGPL v2.1(Xaru)
+ * BSD(phantomJS)
 
 
 
