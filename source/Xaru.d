@@ -133,6 +133,11 @@ class Ghost{
 		//std.file.remove("grab.js");
 		return result;
 	}
+
+	~this()
+	{
+		
+	}
 }
 
 
@@ -176,14 +181,50 @@ enum Category{
 
 
 //
+// Mobile Agent
+//
+/*
+string[string] MobileAgent = [
+	"Apple_IPhone":"Mozilla/5.0 (iPhone; U; CPU iPhone OS 3_0 like Mac OS X; en-us) AppleWebKit/420.1 (KHTML, like Gecko) Version/3.0 Mobile/1A542a Safari/419.3",
+	"Apple_IPad":"Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B367 Safari/531.21.10",
+
+	"BlackBerry_9700Bold":"BlackBerry9700/5.0.0.423 Profile/MIDP-2.1 Configuration/CLDC-1.1 VendorID/100",
+	
+	"Android SDK 1.5r3":"Mozilla/5.0 (Linux; U; Android 1.5; de-; sdk Build/CUPCAKE) AppleWebkit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
+    "Nexus One":"Mozilla/5.0 (Linux; U; Android 2.1-update1; en-us; Nexus One Build/ERE27) AppleWebkit/530.17 (KHTML, like Gecko) Version/4.0 Mobile Safari/530.17",
+
+    "HTC_Legend":"Mozilla/5.0 (Linux; U; Android 2.1-update1; fr-fr; desire_A8181 Build/ERE27) AppleWebKit/530.17 (KHTML, like Gecko) Version/4.0 Mobile Safari/530.17",
+    "HTC_Hero":"Mozilla/5.0 (Linux; U; Android 1.5; en-za; HTC Hero Build/CUPCAKE) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
+    "HTC_Tattoo":"Mozilla/5.0 (Linux; U; Android 1.6; en-us; HTC_TATTOO_A3288 Build/DRC79) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
+    "HTC_Magic":"Mozilla/5.0 (Linux; U; Android 1.5; en-dk; HTC Magic Build/CUPCAKE) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
+	"HTC_EVO4G":"Mozilla/5.0 (Linux; U; Android 2.1-update1; en-us; Sprint APA9292KT Build/ERE27) AppleWebKit/530.17 (KHTML, like Gecko)",
+
+	"SAMSUNG_i7500Galaxy":"Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) AppleWebkit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
+	"SAMSUNG_SHVE250S":"Mozilla/5.0 (Linux; U; Android 4.4.2; ko-kr; SHV-E250S Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
+];*/
+
+
+
+
+
+//
 // GET method by cURL
 //
-string GET( string url ){
-	//auto http = HTTP(url);
-	//http.setUserAgent( "Mozilla/5.0 (compatible;  MSIE 7.01; Windows NT 5.0)" );
+string GET( string url, bool using_http_agent = false ){
 	string html;
 	try
-		{ html = cast(string)get(url); } //{ html = cast(string)get(url, http); }
+	{
+		// 모바일 접속
+		if( using_http_agent )
+		{
+			auto http = HTTP(url);
+			http.setUserAgent( "Mozilla/5.0 (Linux; U; Android 4.4.2; ko-kr; SHV-E250S Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30" );
+			html = cast(string)get(url, http);
+		}
+		else if( !using_http_agent )
+		{
+			html = cast(string)get(url); }
+		}
 	catch(CurlException e)
 		{ return e.msg; exit(0); }
 	return html;
@@ -282,6 +323,7 @@ class MaruMaru{
 // MaruMaru Cartoon parsing class
 //
 class Cartoon{
+	private string[string][] LIST;
 	private string ID;
 	private string HTML;
 	private CartoonType TYPE;
@@ -292,7 +334,8 @@ class Cartoon{
 	//
 	// 생성자
 	//
-	this( string id, CartoonType type = CartoonType.AUTO ){
+	this( string id, CartoonType type = CartoonType.AUTO, bool load=true ){
+		this.LIST = null;
 		this.ID = id;
 		string temp;
 
@@ -320,10 +363,14 @@ class Cartoon{
 		finally
 		{
 			if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
-				throw new Exception("해당 만화의 HTML를 잃어올 수 없습니다. 마루마루 사이트 자체의 문제인지 확인해보시고 다시 시도해주세요.\n(Can't not open http://marumaru.in/b/"~temp~"/"~id~")\n==================================================\n참조:\n"~this.HTML);
+				throw new Error("해당 만화의 HTML를 잃어올 수 없습니다. 마루마루 사이트 자체의 문제인지 확인해보시고 다시 시도해주세요.\n(Can't not open http://marumaru.in/b/"~temp~"/"~id~")\n==================================================\n참조:\n"~this.HTML);
+			}
+			// 미리 읽기가 등록되어 있다면...
+			else if( load )
+			{
+				this.LIST = getList();
 			}
 		}
-		fetch("CCartoonThis_HTML_TYPE", temp~"\n\n\n"~this.HTML);
 	}
 
 
@@ -350,8 +397,17 @@ class Cartoon{
 
 		uint x = this.HTML.indexOf(start_tag) + start_tag.length;
 		uint y = this.HTML[x..this.HTML.length].indexOf( end_tag );
-
-		return this.HTML[x..x+y];
+		try{
+			return this.HTML[x..x+y];
+		}
+		catch( core.exception.RangeError e )
+		{
+			debug(xaru)
+			{
+				fetch("stripBody_RangeError.txt", "HTML:\n"~this.HTML);
+			}
+		}
+		return "";
 	}
 
 
@@ -511,19 +567,25 @@ class Cartoon{
 
 
 	//
-	// 다운로드 실행
+	// getCartoonImageUrls
 	//
-	void download( string chapter_name, string path=".", bool fix_name=true, bool cre_zip=false )
+	string[] getImageUrls( string chapter_name )
 	{
-		string[string][] list = getList();
+		string[] result = [];
+		string[string][] list = null;
+		
+		// 기존 LIST가 존재한다면 다시 새로 받아오지 않고 가져다 쓴다.
+		if( this.LIST == null )
+			{ list = getList(); }
+		else
+			{ list = this.LIST; }
+
 		string[] regex_patthens = [
 			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
 			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
 			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d/]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\?\\d]*)",
 			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\""
 		];
-		string[] file_url_list = [];
-		string[] member_path_list = [];
 
 		foreach( element; list )
 		{
@@ -549,107 +611,123 @@ class Cartoon{
 							// 이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?~ 부분 삭제
 							if( url.indexOf("?") != -1 ) { url = replaceAll( url, regex("\\?[\\d]+"), ""); }
 							// 만약 (n).dp.blogspot.com에서 https라면 http로 변경
-							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com"); file_url_list ~= url;
+							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com"); result ~= url;
 						}
 					}
 				}
-				//log("file_url_list.txt", file_url_list);
+				//log("result.txt", result);
 				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
-				if( file_url_list.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("URL리스트 생성에 실패했습니다."); }
+				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("URL리스트 생성에 실패했습니다."); }
 
 				// 리스트에서 중복항목을 제거
-				file_url_list = ezUniq(file_url_list);
+				result = ezUniq(result);
 				
 				// 리스트에서 마루마루 관련 인장 제거
-				file_url_list = ezFilter(file_url_list, "우마루세로");
-				file_url_list = ezFilter(file_url_list, "oeCAmOD");
-
-				// 다운로드 작업 시작
-				uint counter_num = 0;
-				foreach( file_url; file_url_list )
-				{
-					// url상에서 파일이름만 추출
-					string file_name;
-					import std.array:split; file_name=file_url.split("/")[ file_url.split("/").length-1 ];
-
-					// 추출된 파일이름 검증
-					auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[JjPpEeNnGg]{3,4}") );
-					if( !file_name_verify_match.empty() )
-					{
-						// [체크]-1~9는 01~09로 서식변경
-						
-						string counter_str = "";		
-						if(fix_name)
-						{ import std.format; auto wf = std.array.appender!string(); formattedWrite(wf, "%.2d",counter_num); counter_str = wf.data; counter_num+=1; }
-								
-						// 다운로드 시작
-						string local_path = path~"/";
-						file_name = replace(file_name, "/", "");
-						fetch("download_urls.txt", file_url~":"~local_path~counter_str~"_"~file_name );
-						std.net.curl.download( file_url, local_path~counter_str~"_"~file_name );
-
-						// 압축 리스트 작성
-						member_path_list ~= local_path~counter_str~"_"~file_name;
-
-						// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
-						ushort byte_verify = 10000;
-						if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
-						{
-							// '? + 랜덤 5자리' 생성
-							import std.random:randomSample; string tail = "?";
-							foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
-							std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
-						}
-
-
-						if( cre_zip )
-						{
-							// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
-							auto local_path_array = split(path, "/");
-							string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
-							
-							// 압축파일 생성 시작
-							import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
-							auto arch_obj = new ZipArchive();
-
-							foreach( member_path; member_path_list )
-							{
-								uint temp_uint = 0;
-								while( member_path_list.length != temp_uint )
-								{
-									// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
-									if( exists(member_path) )
-									{
-										temp_uint+=1;
-										// 이미지 파일 읽기
-										auto member_file = File(member_path, "r+");
-										// 이미지 파일 크기만큼 byte 배열 생성
-										auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
-										// byte배열에 읽은 데이터를 담는다
-										member_file.rawRead(member_bytes);
-
-										// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
-										ArchiveMember member_obj = new ArchiveMember();
-										member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
-										member_obj.expandedData(member_bytes);
-										member_obj.compressionMethod(CompressionMethod.deflate);
-										
-										// 압축파일에 멤버 추가
-										arch_obj.addMember( member_obj );
-									}
-								}
-							}
-							// 최종 압축
-							void[] compressed_data = arch_obj.build();
-							std.file.write( path~"/"~arch_file_name, compressed_data);
-						}
-					}
-					// 추출된 파일이름 검증에 실패한다면,
-					else { throw new Error("URL 상에서의 파일이름 검증에 실패했습니다."); }
-				}
-
-			} 
+				result = ezFilter(result, "우마루세로");
+				result = ezFilter(result, "oeCAmOD");
+			}
 		}
+		return result;
+	}
+
+
+
+	//
+	// 다운로드 실행
+	//
+	void download( string chapter_name, string path=".", bool fix_name=true, bool cre_zip=false )
+	{
+		string[] member_path_list;
+		string[] file_url_list = getImageUrls( chapter_name );
+		if( file_url_list.length != 0 )
+		{
+			// 다운로드 작업 시작
+			uint counter_num = 0;
+			foreach( file_url; file_url_list )
+			{
+				// url상에서 파일이름만 추출
+				import std.array:split;
+				string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
+				
+				// 추출된 파일이름 검증
+				auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[JjPpEeNnGg]{3,4}") );
+				if( !file_name_verify_match.empty() )
+				{
+					// [체크]-1~9는 01~09로 서식변경
+					string counter_str = "";		
+					if(fix_name)
+					{
+						import std.format;
+						auto wf = std.array.appender!string();
+						formattedWrite(wf, "%.2d",counter_num);
+						counter_str = wf.data;
+						counter_num+=1;
+					}
+							
+					// 다운로드 시작
+					string local_path = path~"/";
+					file_name = replace(file_name, "/", "");
+					fetch("download_urls.txt", file_url~":"~local_path~counter_str~"_"~file_name );
+					std.net.curl.download( file_url, local_path~counter_str~"_"~file_name );
+
+					// 압축 리스트 작성
+					member_path_list ~= local_path~counter_str~"_"~file_name;
+
+					// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
+					ushort byte_verify = 10000;
+					if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
+					{
+						// '? + 랜덤 5자리' 생성
+						import std.random:randomSample; string tail = "?";
+						foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
+						std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
+					}
+
+					// 압축파일 생성 여부
+					if( cre_zip )
+					{
+						// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
+						auto local_path_array = split(path, "/");
+						string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
+							
+						// 압축파일 생성 시작
+						import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
+						auto arch_obj = new ZipArchive();
+
+						foreach( member_path; member_path_list )
+						{
+
+							// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
+							if( exists(member_path) )
+							{
+								// 이미지 파일 읽기
+								auto member_file = File(member_path, "r+");
+								// 이미지 파일 크기만큼 byte 배열 생성
+								auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
+								// byte배열에 읽은 데이터를 담는다
+								member_file.rawRead(member_bytes);
+								// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
+								ArchiveMember member_obj = new ArchiveMember();
+								member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
+								member_obj.expandedData(member_bytes);
+								member_obj.compressionMethod(CompressionMethod.deflate);
+								
+								// 압축파일에 멤버 추가
+								arch_obj.addMember( member_obj );
+							}
+						}
+						// 최종 압축
+						void[] compressed_data = arch_obj.build();
+						std.file.write( path~"/"~arch_file_name, compressed_data);
+					}
+				}
+				// 추출된 파일이름 검증에 실패한다면,
+				else
+					{ throw new Error("URL 상에서의 파일이름 검증에 실패했습니다."); }
+			}
+		}
+		else
+			{ throw new Error("이미지URL을 얻어오는데 실패했습니다. 참조:"~this.ID); }
 	}
 }
 
