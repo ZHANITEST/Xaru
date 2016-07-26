@@ -218,7 +218,7 @@ string GET( string url, bool using_http_agent = false ){
 		if( using_http_agent )
 		{
 			auto http = HTTP(url);
-			http.setUserAgent( "Mozilla/5.0 (Linux; U; Android 4.4.2; ko-kr; SHV-E250S Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30" );
+			http.setUserAgent( "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.72 Safari/537.36" );
 			html = cast(string)get(url, http);
 		}
 		else if( !using_http_agent )
@@ -324,7 +324,7 @@ class MaruMaru{
 //
 class Cartoon{
 	private string[string][] LIST;
-	private string ID;
+	public string ID;
 	private string HTML;
 	private CartoonType TYPE;
 	public string URL;
@@ -533,9 +533,14 @@ class Cartoon{
 	string[string][] getList(){
 		string[string][] result;
 		string temp = stripHref();
+
+		debug{
+			writeln("getList():string temp =");
+			writeln(temp);
+		}
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*shencomics.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 				{ result~= [ e[2]:e[1] ]; }
 		}
@@ -551,9 +556,15 @@ class Cartoon{
 	string[string] getListByArray(){
 		string[string] result;
 		string temp = stripHref();
+
+		debug{
+			writeln("getList():string temp = ");
+			writeln(temp);
+		}
+
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "<a href=\"(http://[w\\.]*shencomics.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>");
 			foreach( e; regex_result )
 			{
 				string key, value;
@@ -575,15 +586,15 @@ class Cartoon{
 		string[string][] list = null;
 		
 		// 기존 LIST가 존재한다면 다시 새로 받아오지 않고 가져다 쓴다.
-		if( this.LIST == null )
-			{ list = getList(); }
-		else
-			{ list = this.LIST; }
-
+		//if( this.LIST == null )
+		//	{ list = getList(); }
+		//else
+		//	{ list = this.LIST; }
+		list = getList();
 		string[] regex_patthens = [
-			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d]+/[\\d]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
+			"src=\"(http://[wblog\\.]*[shenyu]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
 			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
-			"src=\"(http://[w\\.]*shencomics.com/wp-content/upload[s]*/[\\d/]+/[\\S]+\\.[JjPpEeNnGg]{3,4}[\?\\d]*)",
+			"src=\"(http://[wblog\\.]*[shenyu]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\?\\d]*)",
 			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\""
 		];
 
