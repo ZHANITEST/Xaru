@@ -27,7 +27,7 @@ import std.array:replace;
 //
 // 로그 작성(기본값:true)
 //
-const bool LOG_ENABLE = false;
+const bool LOG_ENABLE = true;
 
 
 
@@ -448,7 +448,7 @@ class Cartoon{
 		foreach( line; split_result)
 		{
 			string href, innerText;
-			auto obj = match( line, regex("href=\"http://[w]*.shencomics.com/archives/[\\d]+") );
+			auto obj = match( line, regex("href=\"http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+") );
 			if( !obj.empty() )
 			{
 				href = obj.front.hit(); fetch( "stripHref_href.txt", href );
