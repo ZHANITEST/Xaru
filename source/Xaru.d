@@ -12,6 +12,7 @@ import std.net.curl;
 import std.regex;
 import std.stdio;
 import std.conv;
+import std.uri:encode;
 import std.algorithm;
 import std.string:indexOf;
 import std.file;
@@ -171,6 +172,17 @@ string stripSpecialChars( string body_ ){
 		result = result.replace( e, "_" );
 	}
 	return result;
+}
+
+//
+// @ 윈도우 CMD에서 한글출력하기
+//
+version(Windows){
+	extern(C) int setlocale(int, char*);
+	static this(){
+		core.stdc.wchar_.fwide(core.stdc.stdio.stdout, 1);
+		setlocale(0, cast(char*)"korea");
+	}
 }
 
 //
@@ -370,6 +382,9 @@ class Cartoon{
 	private string HTML;
 	private CartoonPageType TYPE;
 
+	// 어떤 작품의 회차 매칭 패턴
+	private immutable string CHAPTER_MATCHING_PATTHEN;
+
 	public string ID;
 	public string URL;
 
@@ -381,7 +396,7 @@ class Cartoon{
 		this.LIST = null;
 		this.ID = id;
 		
-
+		this.CHAPTER_MATCHING_PATTHEN = "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>";
 		// 해당 ID에 대한 만화url타입의 지정( manga냐 mangaup이냐 그것이 문제로다... )
 		// AUTO의 경우(자동탐색)
 		/*
@@ -481,6 +496,7 @@ class Cartoon{
 		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움( array[0]을 array[1]로 ... )
 		string[] replace_list = [
 			"><a",																">\n<a ",
+			" *&nbsp; *",														"",
 			" *amp; *",															"",
 			"</[^a][spanfontdiv]*>",											"",
 			" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *",		"",
@@ -598,13 +614,9 @@ class Cartoon{
 		string[string][] result;
 		string temp = stripHref();
 
-		debug{
-			writeln("getList():string temp =");
-			writeln(temp);
-		}
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
 				{ result~= [ e[2]:e[1] ]; }
 		}
@@ -619,14 +631,9 @@ class Cartoon{
 		string[string] result;
 		string temp = stripHref();
 
-		debug{
-			writeln("getList():string temp = ");
-			writeln(temp);
-		}
-
 		foreach( line; split(temp, regex("\n")) )
 		{
-			auto regex_result = matchAll(line, "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>");
+			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
 			{
 				string key, value;
@@ -660,7 +667,7 @@ class Cartoon{
 			{
 				// phantomjs로 js가포함된 웹페이지 html 얻어오기
 				auto ghost = new Ghost( element[chapter_name] ); string html = ghost.Grab();
-				fetch( "download_GhostHtml.txt", html );
+				fetch( "getImageUrl(fn)_html(str).txt", html );
 				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
 				foreach( patthen; regex_patthens )
 				{
@@ -683,15 +690,19 @@ class Cartoon{
 				}
 				//log("result.txt", result);
 				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
-				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("URL리스트 생성에 실패했습니다."); }
+				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("Coudn't create a url list(URL리스트 생성에 실패했습니다.)"); }
 
-				// 리스트에서 중복항목을 제거
-				result = ezUniq(result);
+				// 리스트에서 중복항목을 제거				result = ezUniq(result);
+
 				
 				// 리스트에서 마루마루 관련 인장 제거
 				result = ezFilter(result, "우마루세로");
 				result = ezFilter(result, "oeCAmOD");
 			}
+		}
+		// 검색된 만화 URL 배열을 텍스트 로그 출력
+		debug{
+			log("getImageUrls(fn)_result(str[]).txt", result);
 		}
 		return result;
 	}
@@ -705,55 +716,81 @@ class Cartoon{
 		string[] file_url_list = getImageUrls( chapter_name );
 		if( file_url_list.length != 0 )
 		{
-			// 다운로드 작업 시작
-			uint counter_num = 0;
+			uint counter_num = 0; // 파일 이름 앞에 숫자(000N) 넣기 위한 변수 선언
+			string counter_str = "";
+
+			// 입력받은 url배열에서 요소 하나씩 꺼내기
 			foreach( file_url; file_url_list )
 			{
 				// url상에서 파일이름만 추출
 				import std.array:split;
 				string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
 				
-				// 추출된 파일이름 검증
+				// 추출된 파일이름 검증 & 검증되지 않으면 작업하지 않음.
 				auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[JjPpEeNnGg]{3,4}") );
 				if( !file_name_verify_match.empty() )
 				{
-					// [체크]-1~9는 01~09로 서식변경
-					string counter_str = "";		
+					// 원하는 경우에만 파일 앞에 0001~0009_로 서식변경
 					if(fix_name)
 					{
 						import std.format;
 						auto wf = std.array.appender!string();
-						formattedWrite(wf, "%.2d",counter_num);
+						formattedWrite(wf, "%.4d",counter_num);
 						counter_str = wf.data;
 						counter_num+=1;
 					}
 							
-					// 다운로드 시작
+					//
+					// --------------- 다운로드 프로세싱 ---------------
+					//
 					string local_path = path~"/";
 					file_name = replace(file_name, "/", "");
-					fetch("download_urls.txt", file_url~":"~local_path~counter_str~"_"~file_name );
-					std.net.curl.download( file_url, local_path~counter_str~"_"~file_name );
 
-					// 압축 리스트 작성
-					member_path_list ~= local_path~counter_str~"_"~file_name;
+					// curl 다운로드 (
+					//					호스팅된 이미지,
+					//					./0001_dummy.jpg
+					//				);
 
-					// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
-					ushort byte_verify = 10000;
-					if( getSize(local_path~counter_str~"_"~file_name) <= byte_verify )
-					{
-						// '? + 랜덤 5자리' 생성
-						import std.random:randomSample; string tail = "?";
-						foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
-						std.net.curl.download( file_url~tail, local_path~counter_str~"_"~file_name );
+					string local_file_name = local_path~counter_str~"_"~file_name;
+
+					std.net.curl.download(
+						encode(file_url),
+						local_file_name
+					);
+					debug{
+						writeln("다운로드(download): "~ file_url~" To "~local_file_name);
 					}
 
-					// 압축파일 생성 여부
+					// 압축해야할 리스트에 해당 파일 추가
+					member_path_list ~= local_file_name;
+
+					// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
+					const ushort byte_verify = 10000;
+					if( getSize( local_file_name ) <= byte_verify )
+					{
+						// '? + 랜덤 5자리' 생성
+						import std.random:randomSample;
+						string tail = "?";
+						foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
+
+						// 다운로드 재실행
+						// http://www~ 주소 앞부분에 http:// 지워보기
+						std.net.curl.download( encode(file_url~tail), local_file_name );
+						debug{
+							writeln("데이터검증대상(byte_verify): "~local_file_name);
+							writeln("다운로드재실행(download): "~file_url~tail~" To "~local_file_name);
+						}
+					}
+
+					//
+					// --------------- 압축파일 생성 여부 ---------------
+					//
 					if( cre_zip )
 					{
 						// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
 						auto local_path_array = split(path, "/");
 						string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
-							
+						
 						// 압축파일 생성 시작
 						import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
 						auto arch_obj = new ZipArchive();
@@ -764,6 +801,9 @@ class Cartoon{
 							// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
 							if( exists(member_path) )
 							{
+								debug{
+									writeln("압축(ZIP): "~member_path~", 존재함! 압축멤버에 추가시작");
+								}
 								// 이미지 파일 읽기
 								auto member_file = File(member_path, "r+");
 								// 이미지 파일 크기만큼 byte 배열 생성
@@ -783,15 +823,18 @@ class Cartoon{
 						// 최종 압축
 						void[] compressed_data = arch_obj.build();
 						std.file.write( path~"/"~arch_file_name, compressed_data);
+						debug{
+							writeln("압축(ZIP): "~path~"/"~arch_file_name~", 생성완료!");
+						}
 					}
 				}
 				// 추출된 파일이름 검증에 실패한다면,
 				else
-					{ throw new Error("URL 상에서의 파일이름 검증에 실패했습니다."); }
+					{ throw new Error("Coudn't verify url format(URL 상에서의 파일이름 검증에 실패했습니다)."); }
 			}
 		}
 		else
-			{ throw new Error("이미지URL을 얻어오는데 실패했습니다. 참조:"~this.ID); }
+			{ throw new Error("Coudn't get image urls(이미지URL을 얻어오는데 실패했습니다).\nAddress(참조):"~this.ID); }
 	}
 }
 
