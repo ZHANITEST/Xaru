@@ -496,7 +496,7 @@ class Cartoon{
 
 			// 단계별 디버그 출력
 			debug{
-				fetch("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", "w");
+				fetch("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", temp);
 			}
 		}
 
@@ -516,7 +516,9 @@ class Cartoon{
 				href = obj.front.hit();
 				debug { fetch( "stripHref(fn)_href(str).txt", href ); }
 
-				auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
+				// <a hre=~~~> innerText </a> 에서 innerText 추출!
+				// 이전코드: auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
+				auto obj2 = matchAll( line, regex("\">(.+)</a>") );
 				foreach( e; obj2 ){
 					innerText = e[1];
 					// ">만화 <font~~> 3권<a href=" 같이 태그가 덜 지워진 경우 안에서 또 지우는 작업 시작
