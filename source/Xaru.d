@@ -475,36 +475,41 @@ class Cartoon{
 	string stripHref(){
 		// 실제 콘텐츠 부분만 따옴
 		string temp = stripBody();
-		debug{ fetch( "stripHref(fn)_temp(str).txt", temp ); } 
+		debug{ fetch( "stripHref(fn)_temp(str)1.txt", temp ); } 
 		string stripHref;
 		
-		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움
-		string[] target_lsit = [
-			"><a ",
-			"</[^a][spanfont]*>",
-			" *&nbsp; *",
-			" *amp; *",
-			"<font [sizetyl]+=\".+\">",
-			"><a "
-		];
+		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움( array[0]을 array[1]로 ... )
 		string[] replace_list = [
-			">\n<a ",
-			"",
-			"",
-			"",
-			"",
-			">\n<a "
+			"><a",																">\n<a ",
+			" *amp; *",															"",
+			"</[^a][spanfontdiv]*>",											"",
+			" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *",		"",
+			"><a ",																">\n<a "
 		];
 
-		for( int i; i <= target_lsit.length-1; i++ )
+		// 치환
+		for( int i; i <= replace_list.length-1; i+=2 )
 		{
-			temp = replaceAll( temp, regex(target_lsit[i]), replace_list[i]);
+			temp = replaceAll( temp,
+				regex( replace_list[i] ), replace_list[i+1]
+			);
+
+			// 단계별 디버그 출력
+			debug{
+				fetch("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", "w");
+			}
 		}
+
+		// 치환 후에 결과 디버그 출력
+		debug{ fetch( "stripHref(fn)_temp(str)2.txt", temp ); }
 		string[] split_result = split(temp, regex("\n") );
 
 		foreach( line; split_result)
 		{
+			// href 따로 innerText 따로 추출하기
 			string href, innerText;
+
+			// 먼저 href
 			auto obj = match( line, regex("href=\"http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+") );
 			if( !obj.empty() )
 			{
@@ -519,7 +524,6 @@ class Cartoon{
 					{
 						// span, font 태그에 대해서 한번에 지우는 패턴!
 						innerText = replaceAll( innerText, regex(" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *"), "" );
-						// *<span [\D-]+> *
 					}
 				}
 				debug{ fetch( "stripHref(fn)_innerText(str).txt", innerText ); }
