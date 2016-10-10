@@ -117,8 +117,17 @@ void makedir( string path ){ if( !exists(path) ){ mkdir(path); } }
 //
 // @ log; 배열을 텍스트파일로 출력
 //
-void log( string file_name, string[] output ){
-	File f = File(file_name, "w");
+void log( string filename, string body_ ){
+	debug{
+		auto f = new File( "[debug]"~filename, "w"); f.write( body_ ); f.close();
+	}
+}
+
+//
+// @ log; 배열을 텍스트파일로 출력
+//
+void logArray( string file_name, string[] output ){
+	File f = File("[debug]"~file_name, "w");
 	foreach( line; output ) { f.writeln(line); }
 	f.close();
 }
@@ -464,7 +473,7 @@ class Cartoon{
 		else // 이것도 저것도 검색이 안되는 경우 None.
 		{
 			debug{
-				fetch("stripBody(fn)_thisHTML(str).txt", this.HTML);
+				log("stripBody(fn)_thisHTML(str).txt", this.HTML);
 			}
 			return "None";
 		}
@@ -477,7 +486,7 @@ class Cartoon{
 		catch( core.exception.RangeError e )
 		{
 			debug
-			{ fetch("stripBody(fn)_thisHTML(str)~RangeError.txt", this.HTML); }
+			{ log("stripBody(fn)_thisHTML(str)~RangeError.txt", this.HTML); }
 		}
 		return "None";
 	}
@@ -490,7 +499,7 @@ class Cartoon{
 	string stripHref(){
 		// 실제 콘텐츠 부분만 따옴
 		string temp = stripBody();
-		debug{ fetch( "stripHref(fn)_temp(str)1.txt", temp ); } 
+		debug{ log( "stripHref(fn)_temp(str)1.txt", temp ); } 
 		string stripHref;
 		
 		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움( array[0]을 array[1]로 ... )
@@ -512,12 +521,12 @@ class Cartoon{
 
 			// 단계별 디버그 출력
 			debug{
-				fetch("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", temp);
+				log("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", temp);
 			}
 		}
 
 		// 치환 후에 결과 디버그 출력
-		debug{ fetch( "stripHref(fn)_temp(str)2.txt", temp ); }
+		debug{ log( "stripHref(fn)_temp(str)2.txt", temp ); }
 		string[] split_result = split(temp, regex("\n") );
 
 		foreach( line; split_result)
@@ -530,7 +539,7 @@ class Cartoon{
 			if( !obj.empty() )
 			{
 				href = obj.front.hit();
-				debug { fetch( "stripHref(fn)_href(str).txt", href ); }
+				debug { log( "stripHref(fn)_href(str).txt", href ); }
 
 				// <a hre=~~~> innerText </a> 에서 innerText 추출!
 				// 이전코드: auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
@@ -544,28 +553,19 @@ class Cartoon{
 						innerText = replaceAll( innerText, regex(" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *"), "" );
 					}
 				}
-				debug{ fetch( "stripHref(fn)_innerText(str).txt", innerText ); }
+				debug{ log( "stripHref(fn)_innerText(str).txt", innerText ); }
 				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";
 			}
 			
 		}
-		debug{ fetch( "stripHref(fn)_stripHref(str).txt", stripHref ); }
+		debug{ log( "stripHref(fn)_stripHref(str).txt", stripHref ); }
 		return stripHref;
-	}
-
-	//
-	// @ 파일 로그
-	//
-	private void fetch( string filename, string body_ ){
-		debug{
-			auto f = new File( "[debug]"~filename, "w"); f.write( body_ ); f.close();
-		}
-	}
+	} 
 
 	//
 	// @ 커버이미지 URL 가져오기
 	//
-	string getCoverImage(){		
+	string getCoverImage(){
 		string html_fix = stripBody();
 		string[] regex_patthens = [
 			r"http:\/\/marumaru.in\/imgr\/[\S]+\.[jpneg]{3,4}",
@@ -667,7 +667,7 @@ class Cartoon{
 			{
 				// phantomjs로 js가포함된 웹페이지 html 얻어오기
 				auto ghost = new Ghost( element[chapter_name] ); string html = ghost.Grab();
-				fetch( "getImageUrl(fn)_html(str).txt", html );
+				log( "getImageUrl(fn)_html(str).txt", html );
 				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
 				foreach( patthen; regex_patthens )
 				{
@@ -688,9 +688,8 @@ class Cartoon{
 						}
 					}
 				}
-				//log("result.txt", result);
 				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
-				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } fetch("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("Coudn't create a url list(URL리스트 생성에 실패했습니다.)"); }
+				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } log("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("Coudn't create a url list(URL리스트 생성에 실패했습니다.)"); }
 
 				// 리스트에서 중복항목을 제거				result = ezUniq(result);
 
@@ -702,9 +701,10 @@ class Cartoon{
 		}
 		// 검색된 만화 URL 배열을 텍스트 로그 출력
 		debug{
-			log("getImageUrls(fn)_result(str[]).txt", result);
+			logArray("getImageUrls(fn)_result(str[]).txt", result);
 		}
-		return result;
+		// 중복제거
+		return ezUniq(result);
 	}
 
 	//
