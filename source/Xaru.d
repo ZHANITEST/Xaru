@@ -475,21 +475,30 @@ class Cartoon{
 		
 		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움( array[0]을 array[1]로 ... )
 		string[] replace_list = [
+			// 개행으로 보기 쉽게
 			"><a",																">\n<a ",
+
+			// 주요 삭제 태그들
 			" *&nbsp; *",														"",
 			" *amp; *",															"",
-			" *</*span[a-z0-9=\"-:; \\.]*> *",									"",
-			" *</*i[a-z0-9=\"-:; \\.]*> *",										"",
-			" *</*div[a-z0-9=\"-:; \\.]*> *",									"",
-			"style=\"[a-z0-9=\"-:; \\.]*\"",									"",
-			" *target=\"_[a-z]+\" *",											"",
+			" *</*span[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",					"", // span
+			" *</*font[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",					"", // font
+			" *</*p[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",						"", // p
+			" *</*[div]{1,3}[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",			"", // div, i
+
+			// 앵커에 붙은 스타일 삭제
+			" *target=\"_[\\w]+\" *",											"",
+			" *style=\"[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]+\"",					"",
+
+			// 마무리
 			"</[^a][spanfontdiv]*>",											"",
 			" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *",		"",
 			"><a ",																">\n<a ",
+			"</a><a",															"</a>\n<a",
 			"ahref",															"a href"
 		];
 
-		// 치환
+		// 태그 정리를 위한 치환
 		for( int i; i <= replace_list.length-1; i+=2 )
 		{
 			temp = replaceAll( temp,
@@ -502,8 +511,10 @@ class Cartoon{
 			}
 		}
 
-		// 치환 후에 결과 디버그 출력
+		// 치환 후에 결과 한번더 디버그 출력
 		debug{ log( "stripHref(fn)_temp(str)2.txt", temp ); }
+
+		// 입력 준비
 		string[] split_result = split(temp, regex("\n") );
 
 		foreach( line; split_result)
@@ -591,6 +602,7 @@ class Cartoon{
 	string[string][] getList(){
 		string[string][] result;
 		string temp = stripHref();
+
 		debug{ string forlog = (temp~"\n\n\n\n\n"); }
 
 		foreach( line; split(temp, regex("\n")) )
@@ -598,6 +610,8 @@ class Cartoon{
 			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
 			{
+				// key에 앵커(html:a) 태그가 있는 경우 제거하자 => 마루마루 페이지가 워낙 엉망이라서...
+				// ex) 블리치:84968
 				result~= [ e[2]:e[1] ];
 				debug{ forlog ~=  (e[2]~":"~e[1]~"\n"); }
 			}
