@@ -1,13 +1,12 @@
-/*
-
-	Xaru.d
-	License: LGPL v2
-
-	By ZHANITEST
-		* zhanitest.egloos.com
-
-*/
-module Xaru;
+//::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//
+//	Xaru.d
+//	License: LGPL v2
+//
+//	By ZHANITEST( * zhanitest.egloos.com )
+//
+//::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+module xaru;
 import std.net.curl;
 import std.regex;
 import std.stdio;
@@ -18,30 +17,15 @@ import std.string:indexOf;
 import std.file;
 import std.process;
 import std.array:replace;
-
-
-
-
-
-//
-// 로그 작성(기본값:true)
-//
-const bool LOG_ENABLE = true;
-
-
-
-
 //--------------------------------------------------------------------------------
 //
 // - [ 상수 정의; ] -
 //
 //--------------------------------------------------------------------------------
-
 //
 // @ 카테고리 리스트<const, immutable 금지 ; XaruGUI에 들어갈 것.>
 //
 string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
-
 //
 // @ 마루마루 만화 페이지의 타입
 //
@@ -50,7 +34,6 @@ enum CartoonPageType{
 	MANGAUP,
 	AUTO
 }
-
 //
 // @ 만화 카테고리들
 //
@@ -167,7 +150,7 @@ string GET( string url, bool using_http_agent = false ){
 			html = cast(string)get(url); }
 		}
 	catch(CurlException e)
-		{ return e.msg; exit(0); }
+		{ return e.msg; }
 	return html;
 }
 
@@ -401,21 +384,9 @@ class Cartoon{
 	// @ 생성자
 	//
 	this( string id, bool load=true ){
-	//this( string id, CartoonPageType type = CartoonPageType.AUTO, bool load=true ){
 		this.LIST = null;
 		this.ID = id;
-		
-		this.CHAPTER_MATCHING_PATTHEN = "href=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+)\">(.+)</a>";
-		// 해당 ID에 대한 만화url타입의 지정( manga냐 mangaup이냐 그것이 문제로다... )
-		// AUTO의 경우(자동탐색)
-		/*
-		
-		if( type == CartoonPageType.AUTO ){
-			page_type = "manga";
-			this.TYPE = CartoonPageType.AUTO;
-		}
-		if( type == CartoonPageType.MANGA )		{ page_type = "manga"; this.TYPE = CartoonPageType.MANGA; }
-		if( type == CartoonPageType.MANGAUP ) 	{ page_type = "mangaup"; this.TYPE = CartoonPageType.MANGAUP; }*/
+		this.CHAPTER_MATCHING_PATTHEN = "href=\"(http://[wblog\\.]*[sheyuncomiwabirp]{9,11}.com/archives/[0-9A-z-]+)\">(.+)</a>";
 
 		// 그냥 magna로 정의
 		string page_type = "manga";
@@ -507,9 +478,15 @@ class Cartoon{
 			"><a",																">\n<a ",
 			" *&nbsp; *",														"",
 			" *amp; *",															"",
+			" *</*span[a-z0-9=\"-:; \\.]*> *",									"",
+			" *</*i[a-z0-9=\"-:; \\.]*> *",										"",
+			" *</*div[a-z0-9=\"-:; \\.]*> *",									"",
+			"style=\"[a-z0-9=\"-:; \\.]*\"",									"",
+			" *target=\"_[a-z]+\" *",											"",
 			"</[^a][spanfontdiv]*>",											"",
 			" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *",		"",
-			"><a ",																">\n<a "
+			"><a ",																">\n<a ",
+			"ahref",															"a href"
 		];
 
 		// 치환
@@ -535,14 +512,13 @@ class Cartoon{
 			string href, innerText;
 
 			// 먼저 href
-			auto obj = match( line, regex("href=\"http://[wblog\\.]*[sheyun]{3,4}comics.com/archives/[\\d]+") );
+			auto obj = match( line, regex( this.CHAPTER_MATCHING_PATTHEN) );
 			if( !obj.empty() )
 			{
 				href = obj.front.hit();
 				debug { log( "stripHref(fn)_href(str).txt", href ); }
 
-				// <a hre=~~~> innerText </a> 에서 innerText 추출!
-				// 이전코드: auto obj2 = matchAll( line, regex("\">([^<>].+)</a>") );
+				/*
 				auto obj2 = matchAll( line, regex("\">(.+)</a>") );
 				foreach( e; obj2 ){
 					innerText = e[1];
@@ -553,8 +529,10 @@ class Cartoon{
 						innerText = replaceAll( innerText, regex(" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *"), "" );
 					}
 				}
-				debug{ log( "stripHref(fn)_innerText(str).txt", innerText ); }
-				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";
+				debug{ log( "stripHref(fn)_stripHref.txt",  href~"  /  "~innerText ); }
+				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";*/
+
+				stripHref ~= href~"\n";
 			}
 			
 		}
@@ -613,12 +591,20 @@ class Cartoon{
 	string[string][] getList(){
 		string[string][] result;
 		string temp = stripHref();
+		debug{ string forlog = (temp~"\n\n\n\n\n"); }
 
 		foreach( line; split(temp, regex("\n")) )
 		{
 			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
-				{ result~= [ e[2]:e[1] ]; }
+			{
+				result~= [ e[2]:e[1] ];
+				debug{ forlog ~=  (e[2]~":"~e[1]~"\n"); }
+			}
+		}
+
+		debug{
+			log("getList(fn)_forlog.txt", forlog);
 		}
 		result.length -= result.uniq().copy(result).length;
 		return result;
@@ -657,7 +643,8 @@ class Cartoon{
 			"src=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
 			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
 			"src=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)",
-			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\""
+			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\"",
+			"src=\"/(storage/gallery/[\\w\\d_-]+/[\\w\\d_-]+\\.[JjPpEeNnGg]{3,4})"
 		];
 
 		foreach( element; list )
@@ -666,8 +653,11 @@ class Cartoon{
 			if( element.keys[0] == chapter_name )
 			{
 				// phantomjs로 js가포함된 웹페이지 html 얻어오기
-				auto ghost = new Ghost( element[chapter_name] ); string html = ghost.Grab();
-				log( "getImageUrl(fn)_html(str).txt", html );
+				auto ghost = new Ghost( element[chapter_name] );
+				string html = ghost.Grab();
+				
+				debug { log( "getImageUrl(fn)_html(str).txt", html ); }
+
 				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
 				foreach( patthen; regex_patthens )
 				{
@@ -678,22 +668,34 @@ class Cartoon{
 						// regex에 검색된 이미지 파일 하나하나씩 인장인지 확인하고 아닐 경우만 다운리스트에 추가
 						foreach( temp; match_result )
 						{
-							// src="url", url 에서 url만 따온다
+							// src="url", url 에서 url만 따온다 -> src= 부분 빼고 ... 
 							string url = temp[1];
 
 							// 이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?~ 부분 삭제
 							if( url.indexOf("?") != -1 ) { url = replaceAll( url, regex("\\?[\\d]+"), ""); }
+							
 							// 만약 (n).dp.blogspot.com에서 https라면 http로 변경
-							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com"); result ~= url;
+							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com");
+
+							// wasabisyrup 도메인 추가
+							url = url.replace("storage/gallery","http://wasabisyrup.com/storage/gallery" );
+							result ~= url;
 						}
 					}
 				}
 				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
-				if( result.length == 0 ){ string temp; foreach( e; regex_patthens){ temp~=(e~"\n"); } log("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); throw new Error("Coudn't create a url list(URL리스트 생성에 실패했습니다.)"); }
+				if( result.length == 0 ) {
+					string temp;
+					foreach( e; regex_patthens) {
+						temp~=(e~"\n");
+					}
+					debug{ log("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); }
+					throw new Error("Coudn't create a url list(만화의 목록을 가져올 수 없습니다.");
+				}
 
-				// 리스트에서 중복항목을 제거				result = ezUniq(result);
+				// 리스트에서 중복항목을 제거	
+				result = ezUniq(result);
 
-				
 				// 리스트에서 마루마루 관련 인장 제거
 				result = ezFilter(result, "우마루세로");
 				result = ezFilter(result, "oeCAmOD");
