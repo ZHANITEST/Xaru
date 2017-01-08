@@ -565,16 +565,18 @@ class Cartoon{
 		];
 		
 		// 패턴매칭 시작
-		foreach( patthen; regex_patthens )
-		{
-			// 일치하는 단 한개!
+		foreach( patthen; regex_patthens ) {
+
+			// 일치하는 단 한개만 가져오기!
 			auto result = match( html_fix, patthen );
 
-			// 매치하는 게 있다면 가져온다.
+			// 매치하는 게 있다면 https를 http로 바꾼 후 리턴.
 			if( !result.empty() ){
-				return result.front.hit();
+				return replace( result.front.hit(), "https", "http");
 			}
 		}
+		// **보류**
+		// 이거 예외 처리 하긴 해야 됨...
 		return "None";
 	}
 
