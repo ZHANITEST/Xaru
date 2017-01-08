@@ -159,7 +159,7 @@ string GET( string url, bool using_http_agent = false ){
 //
 string stripSpecialChars( string body_ ){
 	string result = body_;
-	string table[] = [ "/", ":", "*", "?", "<", ">", "|" ];
+	string[] table = [ "/", ":", "*", "?", "<", ">", "|" ];
 	foreach( e; table ){
 		result = result.replace( e, "_" );
 	}
@@ -658,7 +658,7 @@ class Cartoon{
 			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
 			"src=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)",
 			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\"",
-			"src=\"/(storage/gallery/[\\w\\d_-]+/[\\w\\d_-]+\\.[JjPpEeNnGg]{3,4})"
+			"src=\"/(storage/gallery/[\\w\\d_-]+/[\\.\\w\\d_-]+\\.[JjPpEeNnGg]{3,4})"
 		];
 
 		foreach( element; list )
