@@ -16,7 +16,7 @@ import std.algorithm;
 import std.string:indexOf;
 import std.file;
 import std.process;
-import std.array:replace;
+import std.array:replace,split;
 //--------------------------------------------------------------------------------
 //
 // - [ 상수 정의; ] -
@@ -52,7 +52,13 @@ enum Category{
 	OTOKONOKO1	= ["오토코노코타임", "38"],
 	ANG_END		= ["붕탁+완결", "39"]
 }
-
+//
+// @ Headless 드라이버 종류
+//
+enum HeadlessBrowser{
+	PhantomJS,
+	SlimerJS
+}
 //
 // @ 모바일 에이전트(일단 안씀)
 //
@@ -224,25 +230,31 @@ public Category str2cat( string obj ){
 
 //--------------------------------------------------------------------------------
 //
-// - [ PhantomJS 드라이버 클래스 ] -
+// - [ 브라우저 드라이버 클래스 ] -
 //
 //--------------------------------------------------------------------------------
 class Ghost{
-	public string Url;
-	public string FileName;
+	protected string Url;
+	protected string FileName;
+	protected HeadlessBrowser BrowserType;
 
 	// 실행되는 운영체제의 기본값은 windows
-	this( string url, string os="windows", string engine_file_name="phantomjs" )
+	this( string url, HeadlessBrowser browser_type=HeadlessBrowser.PhantomJS )
 	{
 		// url 인수를 멤버변수로 복사
 		this.Url = url;
 
-		// 확장자 정의
-		string ext="";
-		if( os == "windows") { ext = ".exe";}
+		// 브라우저 타입 정의
+		this.BrowserType = browser_type;
+
+		// 확장자 지정
+		string ext = "";
+		version( Windows ) {
+			ext =  browser_type== HeadlessBrowser.PhantomJS ? ".exe" : ".bat";
+		}
 
 		// PhantomJS 실행파일 정의 (기본값: phantomjs.exe )
-		this.FileName = engine_file_name~ext;
+		this.FileName = this.BrowserType == HeadlessBrowser.PhantomJS ? "phantomjs"~ext : "slimerjs"~ext;
 	}
 
 	// PhantomJS 파일이 존재하는가?
@@ -259,11 +271,14 @@ class Ghost{
 	string Grab(){
 		// 스크립트 작성
 		File f = File("grab.js", "w");
-		f.write("var f = require('fs'); var webPage = require('webpage');var page = webPage.create(); page.open('"~this.Url~"', function(status) {setTimeout(function(){ console.log(page.content);phantom.exit();}, 30000);});");
+		string exit_string = this.BrowserType == HeadlessBrowser.PhantomJS ? "phantom.exit();" : "slimer.exit();";
+		f.write( "var webPage = require('webpage'); var page = webPage.create(); page.open('"~this.Url~"', 'post', 'pass=qndxkr', function(status) { setTimeout(function(){ console.log( page.content); "~exit_string~" }, 300); });" );
+		//f.write("var f = require('fs'); var webPage = require('webpage');var page = webPage.create(); page.open('"~this.Url~"', function(status) {setTimeout(function(){ console.log(page.content);phantom.exit();}, 30000);});");
 		f.close();
 
 		// 프로세스 실행
-		auto pid = pipeProcess(["phantomjs", "grab.js"], Redirect.all, null, Config.suppressConsole);
+		auto pid = pipeProcess([ this.FileName, "grab.js"], Redirect.all, null, Config.suppressConsole);
+		//auto pid = pipeProcess(["phantomjs", "grab.js"], Redirect.all, null, Config.suppressConsole);
 		scope(exit) wait(pid.pid);
 
 		// 프로세스로 부터 출력내용을 문자열로 재작성
@@ -373,6 +388,7 @@ class Cartoon{
 	private string[string][] LIST;
 	private string HTML;
 	private CartoonPageType TYPE;
+	private HeadlessBrowser BROWSER_TYPE;
 
 	// 어떤 작품의 회차 매칭 패턴
 	private immutable string CHAPTER_MATCHING_PATTHEN;
@@ -383,10 +399,11 @@ class Cartoon{
 	//
 	// @ 생성자
 	//
-	this( string id, bool load=true ){
+	this( string id, bool load=true, HeadlessBrowser rendering_browser=HeadlessBrowser.PhantomJS ){
 		this.LIST = null;
 		this.ID = id;
 		this.CHAPTER_MATCHING_PATTHEN = "href=\"(http://[wblog\\.]*[sheyuncomiwabirp]{9,11}.com/archives/[0-9A-z-]+)\">(.+)</a>";
+		this.BROWSER_TYPE = rendering_browser;
 
 		// 그냥 magna로 정의
 		string page_type = "manga";
@@ -515,10 +532,10 @@ class Cartoon{
 		debug{ log( "stripHref(fn)_temp(str)2.txt", temp ); }
 
 		// 입력 준비
-		string[] split_result = split(temp, regex("\n") );
+		string[] split_result = std.regex.split(temp, regex("\n") );
 
-		foreach( line; split_result)
-		{
+		foreach( line; split_result) {
+
 			// href 따로 innerText 따로 추출하기
 			string href, innerText;
 
@@ -607,8 +624,7 @@ class Cartoon{
 
 		debug{ string forlog = (temp~"\n\n\n\n\n"); }
 
-		foreach( line; split(temp, regex("\n")) )
-		{
+		foreach( line; std.regex.split(temp, regex("\n")) ) {
 			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
 			{
@@ -633,7 +649,7 @@ class Cartoon{
 		string[string] result;
 		string temp = stripHref();
 
-		foreach( line; split(temp, regex("\n")) )
+		foreach( line; std.regex.split(temp, regex("\n")) )
 		{
 			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
 			foreach( e; regex_result )
@@ -663,27 +679,27 @@ class Cartoon{
 			"src=\"/(storage/gallery/[\\w\\d_-]+/[가-힣 \\.\\w\\d_-]+\\.[JjPpEeNnGg]{3,4})"
 		];
 
-		foreach( element; list )
-		{
+		foreach( element; list ) {
+
 			// 입력 받은 챕터와 리스트의 챕터가 같으면 다운받음. else없음.
-			if( element.keys[0] == chapter_name )
-			{
+			if( element.keys[0] == chapter_name ) {
+
 				// phantomjs로 js가포함된 웹페이지 html 얻어오기
-				auto ghost = new Ghost( element[chapter_name] );
+				auto ghost = new Ghost( element[chapter_name], this.BROWSER_TYPE );
 				string html = ghost.Grab();
 				
 				debug { log( "getImageUrl(fn)_html(str).txt", html ); }
 
 				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
-				foreach( patthen; regex_patthens )
-				{
+				foreach( patthen; regex_patthens ) {
+
 					// url들.
 					auto match_result = matchAll( html, regex(patthen) );
-					if( !(match_result.empty())  )
-					{
+					if( !(match_result.empty())  ) {
+
 						// regex에 검색된 이미지 파일 하나하나씩 인장인지 확인하고 아닐 경우만 다운리스트에 추가
-						foreach( temp; match_result )
-						{
+						foreach( temp; match_result ) {
+
 							// src="url", url 에서 url만 따온다 -> src= 부분 빼고 ... 
 							string url = temp[1];
 
@@ -699,14 +715,16 @@ class Cartoon{
 						}
 					}
 				}
+
 				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
 				if( result.length == 0 ) {
 					string temp;
 					foreach( e; regex_patthens) {
 						temp~=(e~"\n");
 					}
+
 					debug{ log("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); }
-					throw new Error("Coudn't create a url list(만화의 목록을 가져올 수 없습니다.");
+					throw new Error("Coudn't create a url list(만화의 이미지파일 주소를 찾는데 실패했습니다.)\n[ID:'"~this.ID~"'/제목:'"~this.getTitle()~"']");
 				}
 
 				// 리스트에서 중복항목을 제거	
@@ -732,16 +750,17 @@ class Cartoon{
 	{
 		string[] member_path_list;
 		string[] file_url_list = getImageUrls( chapter_name );
-		if( file_url_list.length != 0 )
-		{
-			uint counter_num = 0; // 파일 이름 앞에 숫자(000N) 넣기 위한 변수 선언
+		
+		if( file_url_list.length != 0 ) {
+
+			// 파일 이름 앞에 숫자(000N) 넣기 위한 변수 선언
+			uint counter_num = 0; 
 			string counter_str = "";
 
 			// 입력받은 url배열에서 요소 하나씩 꺼내기
-			foreach( file_url; file_url_list )
-			{
+			foreach( file_url; file_url_list ) {
+
 				// url상에서 파일이름만 추출
-				import std.array:split;
 				string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
 				
 				// 추출된 파일이름 검증 & 검증되지 않으면 작업하지 않음.
@@ -749,25 +768,19 @@ class Cartoon{
 				if( !file_name_verify_match.empty() )
 				{
 					// 원하는 경우에만 파일 앞에 0001~0009_로 서식변경
-					if(fix_name)
-					{
+					if(fix_name == true) {
 						import std.format;
 						auto wf = std.array.appender!string();
 						formattedWrite(wf, "%.4d",counter_num);
 						counter_str = wf.data;
 						counter_num+=1;
 					}
-							
+					
 					//
 					// --------------- 다운로드 프로세싱 ---------------
 					//
 					string local_path = path~"/";
 					file_name = replace(file_name, "/", "");
-
-					// curl 다운로드 (
-					//					호스팅된 이미지,
-					//					./0001_dummy.jpg
-					//				);
 
 					string local_file_name = local_path~counter_str~"_"~file_name;
 
@@ -775,17 +788,16 @@ class Cartoon{
 						encode(file_url),
 						local_file_name
 					);
-					debug{
-						writeln("다운로드(download): "~ file_url~" To "~local_file_name);
-					}
+
+					debug{ writeln("다운로드(download): "~ file_url~" To "~local_file_name); }
 
 					// 압축해야할 리스트에 해당 파일 추가
 					member_path_list ~= local_file_name;
 
 					// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
 					const ushort byte_verify = 10000;
-					if( getSize( local_file_name ) <= byte_verify )
-					{
+					if( getSize( local_file_name ) <= byte_verify ) {
+
 						// '? + 랜덤 5자리' 생성
 						import std.random:randomSample;
 						string tail = "?";
@@ -794,65 +806,61 @@ class Cartoon{
 						// 다운로드 재실행
 						// http://www~ 주소 앞부분에 http:// 지워보기
 						std.net.curl.download( encode(file_url~tail), local_file_name );
-						debug{
-							writeln("데이터검증대상(byte_verify): "~local_file_name);
-							writeln("다운로드재실행(download): "~file_url~tail~" To "~local_file_name);
-						}
-					}
-
-					//
-					// --------------- 압축파일 생성 여부 ---------------
-					//
-					if( cre_zip )
-					{
-						// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
-						auto local_path_array = split(path, "/");
-						string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
-						
-						// 압축파일 생성 시작
-						import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
-						auto arch_obj = new ZipArchive();
-
-						foreach( member_path; member_path_list )
-						{
-
-							// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
-							if( exists(member_path) )
-							{
-								debug{
-									writeln("압축(ZIP): "~member_path~", 존재함! 압축멤버에 추가시작");
-								}
-								// 이미지 파일 읽기
-								auto member_file = File(member_path, "r+");
-								// 이미지 파일 크기만큼 byte 배열 생성
-								auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
-								// byte배열에 읽은 데이터를 담는다
-								member_file.rawRead(member_bytes);
-								// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
-								ArchiveMember member_obj = new ArchiveMember();
-								member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
-								member_obj.expandedData(member_bytes);
-								member_obj.compressionMethod(CompressionMethod.deflate);
-								
-								// 압축파일에 멤버 추가
-								arch_obj.addMember( member_obj );
-							}
-						}
-						// 최종 압축
-						void[] compressed_data = arch_obj.build();
-						std.file.write( path~"/"~arch_file_name, compressed_data);
-						debug{
-							writeln("압축(ZIP): "~path~"/"~arch_file_name~", 생성완료!");
-						}
+						debug{ writeln("깨진파일로 검출됨, : "~local_file_name); writeln("다운로드재실행: "~file_url~tail~" To "~local_file_name); }
 					}
 				}
 				// 추출된 파일이름 검증에 실패한다면,
-				else
-					{ throw new Error("Coudn't verify url format(URL 상에서의 파일이름 검증에 실패했습니다)."); }
+				else {
+					throw new Error("Coudn't verify url format(URL 상에서의 파일이름 검증에 실패했습니다).");
+				}
+			}
+
+			//
+			// --------------- 압축파일 생성 여부 ---------------
+			// *** 함수로 분리 예정 ***
+			if( cre_zip == true ) {
+				// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
+				auto local_path_array = split(path, "/");
+				string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
+				
+				// 압축파일 생성 시작
+				import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
+				auto arch_obj = new ZipArchive();
+
+				foreach( member_path; member_path_list ) {
+
+					// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
+					if( exists(member_path) ) {
+						debug{ writeln("압축(ZIP): "~member_path~", 존재함! 압축멤버에 추가시작"); }
+
+						// 이미지 파일 읽기
+						auto member_file = File(member_path, "r+");
+						
+						// 이미지 파일 크기만큼 byte 배열 생성
+						auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
+						
+						// byte배열에 읽은 데이터를 담는다
+						member_file.rawRead(member_bytes);
+						
+						// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
+						ArchiveMember member_obj = new ArchiveMember();
+						member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
+						member_obj.expandedData(member_bytes);
+						member_obj.compressionMethod(CompressionMethod.deflate);
+						
+						// 압축파일에 멤버 추가
+						arch_obj.addMember( member_obj );
+					}
+				}
+				// 최종 압축
+				void[] compressed_data = arch_obj.build();
+				std.file.write( path~"/"~arch_file_name, compressed_data);
+				debug { writeln("압축(ZIP): "~path~"/"~arch_file_name~", 생성완료!"); }
 			}
 		}
-		else
-			{ throw new Error("Coudn't get image urls(이미지URL을 얻어오는데 실패했습니다).\nAddress(참조):"~this.ID); }
+		else {
+			throw new Error("Coudn't get image urls(이미지URL을 얻어오는데 실패했습니다).\nAddress(참조):"~this.ID);
+		}
 	}
 }
 
