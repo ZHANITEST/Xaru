@@ -65,7 +65,6 @@ dmd xaru
 
 
 # TODO
-  1. support "SlimerJS"
-  2. password process
+  1. password process
   3. Refactoring
   4. Linux(*buntu)
