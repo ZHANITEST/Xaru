@@ -4,7 +4,7 @@ import std.stdio;
 import xaru;
 
 /// 버전 넘버링
-const string ver = "0.25A";
+const string ver = "0.26A";
 
 
 /// 윈도우 CMD에서 한글출력 용도
