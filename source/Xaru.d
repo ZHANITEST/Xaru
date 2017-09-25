@@ -1,284 +1,312 @@
-//::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//
-//	Xaru.d
-//	License: LGPL v2
-//
-//	By ZHANITEST( * zhanitest.egloos.com )
-//
-//::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+/**
+ *
+ * [     xaru     ]
+ *
+ * Copyleft:
+ * 2017 ZHANITEST(zhanitest.egloos.com)
+ *
+ * License:
+ * Distributed under the terms of the 'LGPL v2' license.
+ *
+ */
 module xaru;
-import std.net.curl;
-import std.regex;
-import std.stdio;
-import std.conv;
-import std.uri:encode;
-import std.algorithm;
-import std.string:indexOf;
+
+import std.outbuffer;
 import std.file;
+import std.stdio;
 import std.process;
-import std.array:replace,split;
-//--------------------------------------------------------------------------------
-//
-// - [ 상수 정의; ] -
-//
-//--------------------------------------------------------------------------------
-//
-// @ 카테고리 리스트<const, immutable 금지 ; XaruGUI에 들어갈 것.>
-//
-string[] CategoryList = ["단편", "주간", "격주", "월간", "격월/비정기", "단행본", "완결", "붕탁", "와이!", "오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"];
-//
-// @ 마루마루 만화 페이지의 타입
-//
-enum CartoonPageType{
-	MANGA,
-	MANGAUP,
-	AUTO
-}
-//
-// @ 만화 카테고리들
-//
-enum Category{
-	SHORT		= ["단편", "27"],
-	WEEK		= ["주간", "28"],
-	WEEK1		= ["격주", "29"],
-	MONTH		= ["월간", "30"],
-	MONTH1		= ["격월/비정기", "31"],
-	ONCE		= ["단행본","32"],
-	END			= ["완결", "33"],
-	ANG			= ["붕탁", "34"],
-	Y			= ["와이!", "35"],
-	OTOKONOKO	= ["오토코노코+엔솔로지," "36"],
-	SHEMALE		= ["여장소년+엔솔로지", "37"],
-	OTOKONOKO1	= ["오토코노코타임", "38"],
-	ANG_END		= ["붕탁+완결", "39"]
-}
-//
-// @ Headless 드라이버 종류
-//
-enum HeadlessBrowser{
-	PhantomJS,
-	SlimerJS
-}
-//
-// @ 모바일 에이전트(일단 안씀)
-//
-/*
-immutable string[string] MobileAgent = [
-	"Apple_IPhone":"Mozilla/5.0 (iPhone; U; CPU iPhone OS 3_0 like Mac OS X; en-us) AppleWebKit/420.1 (KHTML, like Gecko) Version/3.0 Mobile/1A542a Safari/419.3",
-	"Apple_IPad":"Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B367 Safari/531.21.10",
+static import std.uri;
+static import std.net.curl;
+static import re = std.regex;
+import std.regex:ctRegex,regex;
+import std.conv:to,text;
+import std.random;
+import std.string:indexOf;
+import std.uni:toLower;
+import std.format:formattedWrite;
+import std.algorithm:sort;
+import std.algorithm.iteration:map;
+import std.array:array,replace,split,join,appender;
+import std.parallelism:totalCPUs,parallel;
+import core.thread:Thread, dur;
 
-	"BlackBerry_9700Bold":"BlackBerry9700/5.0.0.423 Profile/MIDP-2.1 Configuration/CLDC-1.1 VendorID/100",
-	
-	"Android SDK 1.5r3":"Mozilla/5.0 (Linux; U; Android 1.5; de-; sdk Build/CUPCAKE) AppleWebkit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
-    "Nexus One":"Mozilla/5.0 (Linux; U; Android 2.1-update1; en-us; Nexus One Build/ERE27) AppleWebkit/530.17 (KHTML, like Gecko) Version/4.0 Mobile Safari/530.17",
+import requests;
+import libdominator;
 
-    "HTC_Legend":"Mozilla/5.0 (Linux; U; Android 2.1-update1; fr-fr; desire_A8181 Build/ERE27) AppleWebKit/530.17 (KHTML, like Gecko) Version/4.0 Mobile Safari/530.17",
-    "HTC_Hero":"Mozilla/5.0 (Linux; U; Android 1.5; en-za; HTC Hero Build/CUPCAKE) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
-    "HTC_Tattoo":"Mozilla/5.0 (Linux; U; Android 1.6; en-us; HTC_TATTOO_A3288 Build/DRC79) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
-    "HTC_Magic":"Mozilla/5.0 (Linux; U; Android 1.5; en-dk; HTC Magic Build/CUPCAKE) AppleWebKit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
-	"HTC_EVO4G":"Mozilla/5.0 (Linux; U; Android 2.1-update1; en-us; Sprint APA9292KT Build/ERE27) AppleWebKit/530.17 (KHTML, like Gecko)",
+// 디버깅용 벤치마크
+debug{ import std.datetime:benchmark; }
 
-	"SAMSUNG_i7500Galaxy":"Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) AppleWebkit/528.5+ (KHTML, like Gecko) Version/3.1.2 Mobile Safari/525.20.1",
-	"SAMSUNG_SHVE250S":"Mozilla/5.0 (Linux; U; Android 4.4.2; ko-kr; SHV-E250S Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
-];*/
+/**
+ * 만화 카테고리 목록
+ * (단편, 주간 , 격주 등등...)
+ */
+string[] CategoryList = [
+	"단편", "주간", "격주", "월간", "격월/비정기",
+	"단행본", "완결", "붕탁", "와이!",
+	"오토코노코+엔솔로지", "여장소년+엔솔로지", "오토코노코타임", "붕탁+완결"
+];
 
-//--------------------------------------------------------------------------------
-//
-// - [ 상수 정의;끝 ] -
-//
-//--------------------------------------------------------------------------------
-
-
-
-
-
-//--------------------------------------------------------------------------------
-//
-// - [ 유틸리티 함수 모음; ] -
-//
-//--------------------------------------------------------------------------------
-
-//
-// @ makedir; 디렉토리 중복에 상관없이 생성
-//
-void makedir( string path ){ if( !exists(path) ){ mkdir(path); } }
-
-//
-// @ log; 배열을 텍스트파일로 출력
-//
-void log( string filename, string body_ ){
-	debug{
-		auto f = new File( "[debug]"~filename, "w"); f.write( body_ ); f.close();
-	}
+/**
+ * 만화 카테고리 식별번호
+ */
+enum CategoryID{
+	SHORT		= 27, /// 단편
+	WEEK		= 28, /// 주간
+	WEEK1		= 29, /// 격주
+	MONTH		= 30, /// 월간
+	MONTH1		= 31, /// 격월/비정기
+	ONCE		= 32, /// 단행본
+	END			= 33, /// 완결
+	ANG			= 34, /// 붕탁
+	Y			= 35, /// 와이!
+	OTOKONOKO	= 36, /// 오토코노코+엔솔로지
+	SHEMALE		= 37, /// 여장소년+엔솔로지
+	OTOKONOKO1	= 38, /// 오토코노코타임
+	ANG_END		= 39  /// 붕탁+완결
 }
 
-//
-// @ log; 배열을 텍스트파일로 출력
-//
-void logArray( string file_name, string[] output ){
-	File f = File("[debug]"~file_name, "w");
-	foreach( line; output ) { f.writeln(line); }
-	f.close();
+/**
+ * 만화 카테고리를 상수로 변환
+ */
+public CategoryID str2id(string id){
+	CategoryID[string] dic = [
+		"주간":CategoryID.WEEK,
+		"격주":CategoryID.WEEK1,
+		"월간":CategoryID.MONTH,
+		"격월/비정기":CategoryID.MONTH1,
+		"단행본":CategoryID.ONCE,
+		"완결":CategoryID.END,
+		"단편":CategoryID.SHORT,
+		"붕탁":CategoryID.ANG,
+		"와이!":CategoryID.Y,
+		"오토코노노코+엔솔로지":CategoryID.OTOKONOKO,
+		"여장소년+엔솔로지":CategoryID.SHEMALE,
+		"오토코노코타임":CategoryID.OTOKONOKO1,
+		"붕탁+완결":CategoryID.ANG_END
+	];
+	return dic[id];
 }
-
-//
-// @ ezUniq; 배열로부터 중복제거
-//
-string[] ezUniq(string[] ori)
-{
-	string[] fix; foreach( e; ori ){ import std.algorithm.searching:canFind; if( !canFind(fix, e) ){ fix~=e; } } return fix;
-}
-
-//
-// @ ezFilter; 해당 문자열의 요소를 전부 지움!
-//
-string[] ezFilter( string[] array, string keyword )
-{
-	string[] temp = []; if(array.length>0){ foreach( e; array) { if( indexOf(e, keyword)== -1 ){temp~=e;} } } return temp;
-}
-
-//
-// @ GET; 입력받은 URL로부터 cURL을 이용해 HTML 가져오기
-//
-string GET( string url, bool using_http_agent = false ){
-	string html;
-	try
-	{
-		// 에이전트 이용 여부
-		if( using_http_agent )
-		{
-			auto http = HTTP(url);
-			http.setUserAgent( "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.72 Safari/537.36" );
-			html = cast(string)get(url, http);
-		}
-		else if( !using_http_agent )
-		{
-			html = cast(string)get(url); }
-		}
-	catch(CurlException e)
-		{ return e.msg; }
-	return html;
-}
-
-//
-// @ stripSpecialChars; 특수문자 제거 함수
-//
-string stripSpecialChars( string body_ ){
-	string result = body_;
-	string[] table = [ "/", ":", "*", "?", "<", ">", "|" ];
-	foreach( e; table ){
-		result = result.replace( e, "_" );
+public string id2str(CategoryID id_enum){
+	string result = "";
+	switch( id_enum ){
+	case CategoryID.WEEK:
+		result = "주간";
+		break;
+	case CategoryID.WEEK1:
+		result = "격주"; break;
+	case CategoryID.MONTH:
+		result = "월간"; break;
+	case CategoryID.MONTH1:
+		result = "격월/비정기"; break;
+	case CategoryID.ONCE:
+		result = "단행본"; break;
+	case CategoryID.END:
+		result = "완결"; break;
+	case CategoryID.SHORT:
+		result = "단편"; break;
+	case CategoryID.ANG:
+		result = "붕탁"; break;
+	case CategoryID.Y:
+		result = "와이!"; break;
+	case CategoryID.OTOKONOKO:
+		result = "오토코노노코+엔솔로지"; break;
+	case CategoryID.SHEMALE:
+		result = "여장소년+엔솔로지"; break;
+	case CategoryID.OTOKONOKO1:
+		result = "오토코노코타임"; break;
+	case CategoryID.ANG_END:
+		result = "붕탁+완결"; break;
+	default:
+		result = "주간"; break;
 	}
 	return result;
 }
 
-//
-// @ 윈도우 CMD에서 한글출력하기
-//
-version(Windows){
-	extern(C) int setlocale(int, char*);
-	static this(){
-		core.stdc.wchar_.fwide(core.stdc.stdio.stdout, 1);
-		setlocale(0, cast(char*)"korea");
+/**
+ *	Headless 드라이버 타입
+ */
+deprecated enum BrowserType{
+	PhantomJS, SlimerJS
+}
+
+/**
+ * 만화 링크
+ */
+struct cartoonLink{
+	uint id; // 만화 ID
+	string title;
+	string name; // 이름(~화)
+	string url; // 주소
+	
+	/**
+	 * 생성자
+	 */ 
+	this(uint id, string title, string name, string url){
+		this.id = id;
+		this.title = title;
+		this.name = name;
+		this.url = url;
 	}
 }
 
-//
-// @ 만화 카테고리들
-//
-public Category str2cat( string obj ){
-	switch( obj ){
-		case "주간":
-			return Category.WEEK; break;
-		case "격주":
-			return Category.WEEK1; break;
-		case "월간":
-			return Category.MONTH; break;
-		case "격월/비정기":
-			return Category.MONTH1; break;
-		case "단행본":
-			return Category.ONCE; break;
-		case "완결":
-			return Category.END; break;
-		case "단편":
-			return Category.SHORT; break;
-		case "붕탁":
-			return Category.ANG; break;
-		case "와이!":
-			return Category.Y; break;
-		case "오토코노노코+엔솔로지":
-			return Category.OTOKONOKO; break;
-		case "여장소년+엔솔로지":
-			return Category.SHEMALE; break;
-		case "오토코노코타임":
-			return Category.OTOKONOKO1; break;
-		case "붕탁+완결":
-			return Category.ANG_END; break;
-		default:
-			return Category.WEEK; break;
+/**
+ * 디렉토리 중복에 상관없이 생성
+ */
+void makeDir( string path ){
+	string[] keywords = split(path, "/");
+	string stack = "./";
+	foreach(p; keywords){
+		stack ~= stripSpecialChars(p)~"/";
+		if( !exists(stack) )
+			{ mkdir(stack); }
 	}
 }
-//--------------------------------------------------------------------------------
-//
-// - [ 유틸리티 함수 모음;끝 ] -
-//
-//--------------------------------------------------------------------------------
+
+/**
+ * 입력받은 URL로부터 cURL을 이용해 HTML 가져오기
+ */
+string getRequest( string url, bool using_http_agent = false ){
+	string html;
+	auto rq = Request();
+	if(using_http_agent){ // 헤더를 사용해야할 때...
+		rq.addHeaders(["User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW6478) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.72 Safari/537.36"]);
+	}
+	Response rp = rq.get(url);
+	html = to!string(rp.responseBody);
+	return html;
+}
+
+
+/**
+ * 특수문자 제거
+ */
+string stripSpecialChars( string text, string keyword=" " ){
+	string result = text;
+	string[] table = [ "/", ":", "*", "?", "<", ">", "|", "？" ];
+	foreach( t; table ){
+		result = result.replace(t, "");
+	}
+	return result;
+}
 
 
 
+/**
+ * 회차 파싱
+ */
+cartoonLink[] scarpChapter(string url){
+	cartoonLink[] links;
+	string html = getRequest(url);
+	
+	// 제목 얻어오기
+	auto rm = re.matchFirst( html, ctRegex!("<meta property=\"og:title\" content=\"(.+)\"/>") );
+	string title = to!string(rm[1]);
+
+	// DOM 오브젝트 생성
+	Dominator dom = new Dominator(html);
+	Node[] nodes = dom.filterDom("a");
+
+	// cartoonLink의 첫번째 인수로 넣을 인덱스
+	uint index = 0; 
+	
+	foreach(node; nodes){
+		 // 노드들 중에 원하는 도메인 문자열이 들어간 노드만 사용
+		foreach(ab; node.getAttributes()){
+			string[] vs = ab.values;		// string key => string[] values
+			string value;					// string value => eg. 나만이 없는 거리 3화
+
+			// lambda
+			auto x = (string keyword){
+				foreach(v; vs)
+					{ if(v.indexOf(keyword)>-1) {value=v; return true;} }
+				return false;
+			};
+
+			// key=href면서, 해당 도메인(bool x())이 포함된 경우,
+			if(ab.key=="href" && (x("yuncomics.com")||x("shencomics.com")||x("wasabisyrup.com")) ){
+				auto removeTag = (string target){ return re.replaceAll(target, ctRegex!("<[^>]*>"), ""); };
+				links ~= cartoonLink(index, title, removeTag(dom.getInner(node)), value);
+				index += 1;
+			}
+		}
+	}
+	return links;
+}
 
 
-//--------------------------------------------------------------------------------
-//
-// - [ 브라우저 드라이버 클래스 ] -
-//
-//--------------------------------------------------------------------------------
-class Ghost{
-	protected string Url;
-	protected string FileName;
-	protected HeadlessBrowser BrowserType;
 
-	// 실행되는 운영체제의 기본값은 windows
-	this( string url, HeadlessBrowser browser_type=HeadlessBrowser.PhantomJS )
-	{
+/**
+ * Headless 브라우저 드라이버
+ */
+deprecated class SimpleWebDriver{
+	protected:
+		string url; // 주소
+		BrowserType browserType; // 브라우저 타입
+	
+	private:
+		string scriptFileName;
+		string engineFileName;
+
+	/**
+	 * 생성자
+	 */ 
+	this( string url, BrowserType browser_type=BrowserType.PhantomJS ){
 		// url 인수를 멤버변수로 복사
-		this.Url = url;
+		this.url = url;
 
 		// 브라우저 타입 정의
-		this.BrowserType = browser_type;
+		this.browserType = browser_type;
 
 		// 확장자 지정
 		string ext = "";
-		version( Windows ) {
-			ext =  browser_type== HeadlessBrowser.PhantomJS ? ".exe" : ".bat";
+		version(Windows) {
+			ext = (this.browserType==BrowserType.PhantomJS) ? ".exe" : ".bat";
 		}
 
 		// PhantomJS 실행파일 정의 (기본값: phantomjs.exe )
-		this.FileName = this.BrowserType == HeadlessBrowser.PhantomJS ? "phantomjs"~ext : "slimerjs"~ext;
+		this.engineFileName = (this.browserType== BrowserType.PhantomJS) ? "phantomjs"~ext : "slimerjs"~ext;
+
+		debug{
+			writeln(this.engineFileName);
+		}
 	}
 
-	// PhantomJS 파일이 존재하는가?
-	bool hadTomb(){
-		if( std.file.exists(this.FileName) )
-		{
+	/**
+	 * 엔진 가지고 있는 지 확인
+	 */
+	bool haveYou(){
+		if( std.file.exists(this.engineFileName) ) {
 			return true;
 		}
-		else
-		{ return false; }
+		else {
+			return false;
+		}
 	}
 
-	// HTML을 얻어오는 스크립트 작성 & 실행 & 프로세싱
-	string Grab(){
+	/**
+	 * HTML을 얻어오는 스크립트 작성 / 실행 / 프로세싱
+	 */
+	string grab(){
+		// 랜덤 5자리 생성
+		this.scriptFileName = "grab-";
+		
+		// +++ foreach를 map으로 변경
+		map!( x => this.scriptFileName~=to!string(x))( randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5) );
+
+		this.scriptFileName ~= ".js";
+
 		// 스크립트 작성
-		File f = File("grab.js", "w");
-		string exit_string = this.BrowserType == HeadlessBrowser.PhantomJS ? "phantom.exit();" : "slimer.exit();";
-		f.write( "var webPage = require('webpage'); var page = webPage.create(); page.open('"~this.Url~"', 'post', 'pass=qndxkr', function(status) { setTimeout(function(){ console.log( page.content); "~exit_string~" }, 300); });" );
-		//f.write("var f = require('fs'); var webPage = require('webpage');var page = webPage.create(); page.open('"~this.Url~"', function(status) {setTimeout(function(){ console.log(page.content);phantom.exit();}, 30000);});");
-		f.close();
+		File fs = File( this.scriptFileName, "w" );
+		string exit_string = (this.browserType==BrowserType.PhantomJS) ? "phantom.exit();" : "slimer.exit();";
+		fs.write( "var webPage = require('webpage'); var page = webPage.create(); page.open('"~this.url~"', 'post', '478=qndxkr', function(status) { setTimeout(function(){ console.log( page.content); "~exit_string~" }, 300); });" );
+		fs.close();
 
 		// 프로세스 실행
-		auto pid = pipeProcess([ this.FileName, "grab.js"], Redirect.all, null, Config.suppressConsole);
-		//auto pid = pipeProcess(["phantomjs", "grab.js"], Redirect.all, null, Config.suppressConsole);
+		auto pid = pipeProcess(
+			[this.engineFileName, this.scriptFileName],
+			Redirect.all, null,
+			Config.suppressConsole
+		);
 		scope(exit) wait(pid.pid);
 
 		// 프로세스로 부터 출력내용을 문자열로 재작성
@@ -286,160 +314,226 @@ class Ghost{
 		foreach(line; pid.stdout.byLine){
 			result ~= line;
 		}
+
+		// 결과물이 없다면 에러
+		if( result == "" ){
+			throw new Exception("해당 주소로 HTML값을 읽어올 수 없습니다.");
+			scope(failure) return result;
+		}
+		remove(this.scriptFileName);
 		return result;
 	}
-
-	// 소멸자
-	~this()
-	{
-	}
 }
-//--------------------------------------------------------------------------------
-//
-// - [ PhantomJS 드라이버 클래스;끝 ] -
-//
-//--------------------------------------------------------------------------------
 
 
 
-
-
-//--------------------------------------------------------------------------------
-//
-// - [ 마루마루 사이트 파싱 클래스; ] -
-//
-//--------------------------------------------------------------------------------
-class MaruMaru{
-	private string HTML;
-	private string BASE_URl;
-	void navigate( string url ){
-		this.HTML = GET(url);
+/**
+ * 만화 페이지
+ */
+struct cartoonPage{
+	private:
+		string hostingUrl;
+		cartoonLink baseLink;
+	/**
+	 * 생성자
+	 */
+	public this(cartoonLink target){
+		auto mr = re.matchFirst(target.url, ctRegex!("[shenyucomicswabrp]+.com"));
+		this.hostingUrl = mr[0];
+		this.baseLink = target;
 	}
 
-	//
-	// 해당 키워드로 만화 검색하여 제공
-	//
-	string[string][] search( string keyword, bool with_url=true ){
-		string[string][] result;
-		navigate("http://marumaru.in/?r=home&mod=search&keyword="~keyword~"&x=0&y=0");
-		// 패턴매칭 서식
-		// [0]: 모든 문자열, [1]: /b/manga/ID, [2]: ID, [3]: 만화 제목
-		string patthen = "<a href=\"(\\/b\\/manga\\/([\\d]+))\" class=\"subject\">[\n<tablerd>]+<span class=\"thumb\">.+[\n<\\/tablerd>]+<div class=\"sbjbox\">\n<b>(.+)<\\/b>";
-		auto match_result = matchAll( this.HTML, regex(patthen) );
+	/**
+	 * 스크랩
+	 */
+	protected string[] getImageUrls(){
+		string[] urls;
+		string html = getRequest(baseLink.url);
 
-		foreach( element; match_result ){
-			result ~= [
-				element[3] : with_url ? element[1]:element[2]
+		// 암호 걸린 만화일 경우
+		if(html.indexOf("Protected")>-1){
+			auto res = postContent(
+				this.baseLink.url, queryParams("password", "qndxkr", "pass", "qndxkr")
+			);
+			OutBuffer buf = new OutBuffer();
+			buf.write(res.data);
+			html = buf.toString();
+		}
+
+		debug{
+			if(html.indexOf("Protected")>-1){
+				writeln("Protected Link:", this.baseLink);
+			}
+		}
+
+		Dominator dom = new Dominator(html);
+		Node[] nodes = dom.filterDom("img");
+
+		foreach(node; nodes){
+			foreach(ab; node.getAttributes()){
+				string v = ab.values[0];
+				if(v.indexOf("/storage/gallery/")>-1){
+					urls ~= "http://"~this.hostingUrl~v;
+				}
+			}
+		}
+
+		// {임시} 조건 하나 더 검사...
+		//	regex vs indexOf
+		
+		if(	urls[0].indexOf("jpg")<0 &&
+			urls[0].indexOf("jpeg")<0&&
+			urls[0].indexOf("JPG")<0 &&
+			urls[0].indexOf("JPEG")<0 )
+		{
+			urls = null;
+			
+			// 패턴들
+			string[] patthens = [
+				"/storage/gallery/[A-z0-9-]+/[\\S_)(]+ [\\S_)(]+\\.[JjPpEeGg]+",
+				"/storage/gallery/[A-z0-9-]+/[\\S_)( ]+\\.[JjPpEeGg]{3,4}"
 			];
-		}
-		return result;
-	}
 
-
-
-	//
-	// 만화 목록 가져오기
-	//
-	string[string] getCartoonList( Category cat_ ){
-		auto cat = cat_;
-		string id		= cat[1]; string category = cat[0];
-		string base_url = "www.marumaru.in/?c=1/"~id;
-		string[string] CartoonList;	// 인덱스 리스트
-		uint page_count;			// 페이지 수
-		
-		// 이 카테고리의 페이지는 얼마나 되느뇨?
-		string html = GET( base_url );
-
-		// match_result TO array
-		auto match_result = matchAll( html, regex(r">([\d]+)</[span]{1,4}>") );
-		string[] temp;
-		foreach( element; match_result ){ temp ~= element[1]; }
-		sort( temp );
-		page_count = to!uint( temp[temp.length-1] );
-		
-		// 페이지 별로 파싱 (1, 2, 3 페이지...)
-		foreach( page; temp ){
-			html = GET( base_url~"&cat="~category~"&p="~page );
-			auto urls_match = matchAll( html, regex( r"uid=([\d]+).><span class=.cat.>[\S ]+<\/span>([\d\S ]+)<\/a>"));
-			foreach( element; urls_match ){
-				CartoonList[ element[2] ] ~= element[1] ;
+			foreach(p; patthens){
+				auto r = re.matchAll(html, regex(p));
+				if(r.empty==false){
+					foreach(e; r)
+						{ urls ~="http://"~this.hostingUrl~e[0]; }
+				}
 			}
 		}
-		return CartoonList;
+		return urls;
+	}
+
+	public void download(){
+		string[string] dl_list;
+		uint count = 0;
+		foreach(imgurl; this.getImageUrls()){
+			string path = "./download/"~stripSpecialChars(baseLink.title)~"/"~stripSpecialChars(baseLink.name)~"/";
+			makeDir(path);
+			auto n = std.array.appender!string();
+			formattedWrite(n, "%.4d", count);
+			dl_list[imgurl] = path~n.data~"_"~stripSpecialChars(split(imgurl,"/")[$-1]);
+			count += 1;
+		}
+
+		// 병렬
+		writeln("다운로드 시작: "~this.baseLink.name);
+		foreach( imgurl; parallel(dl_list.keys) ){
+			auto rq = Request();
+			auto ds = rq.get(std.uri.encode(imgurl));
+			std.file.write(dl_list[imgurl], ds.responseBody.data);
+		}
+		writeln("다운로드 완료: "~this.baseLink.name);
+		writeln("______________________________________________________________________");
 	}
 }
 
-//--------------------------------------------------------------------------------
-//
-// - [ 마루마루 사이트 파싱 클래스;끝 ] -
-//
-//--------------------------------------------------------------------------------
 
 
+/**
+ * 마루마루 사이트 파싱 클래스
+ *
+ * Example
+ * ------------------------------
+ * auto site_bot = new MaruMaruPage("84968");
+ * site_bot.search("블리치");
+ * ------------------------------
+ */
+class MaruMaruPage{
+	private:
+		string id;
+		string cookedHtmlText;
+		string htmlText;
+		string masterTag;
 
-
-
-//--------------------------------------------------------------------------------
-//
-// - [ 마루마루 만화클래스; ] -
-//
-//--------------------------------------------------------------------------------
-class Cartoon{
-	private string[string][] LIST;
-	private string HTML;
-	private CartoonPageType TYPE;
-	private HeadlessBrowser BROWSER_TYPE;
-
-	// 어떤 작품의 회차 매칭 패턴
-	private immutable string CHAPTER_MATCHING_PATTHEN;
-
-	public string ID;
-	public string URL;
-
-	//
-	// @ 생성자
-	//
-	this( string id, bool load=true, HeadlessBrowser rendering_browser=HeadlessBrowser.PhantomJS ){
-		this.LIST = null;
-		this.ID = id;
-		this.CHAPTER_MATCHING_PATTHEN = "href=\"(http://[wblog\\.]*[sheyuncomiwabirp]{9,11}.com/archives/[0-9A-z-]+)\">(.+)</a>";
-		this.BROWSER_TYPE = rendering_browser;
-
-		// 그냥 magna로 정의
-		string page_type = "manga";
-		this.TYPE = CartoonPageType.MANGA;
-		
-		try
-		{
-			// URL과 HTML을 요청 후 저장
-			this.URL="http://marumaru.in/b/"~page_type~"/"~this.ID;
-			this.HTML = GET(this.URL);
-		}
-		// cURL 에러가 발생 시 ... 
-		catch( std.net.curl.CurlException e )
-		{
-			if( page_type == "magnaup")
-				{ this.URL="http://marumaru.in/b/manga/"~this.ID; this.HTML = GET(this.URL); }
-			else if( page_type == "manga")
-				{ this.URL="http://marumaru.in/b/mangaup/"~this.ID; this.HTML = GET(this.URL);  }
-		}
-		finally
-		{
-			if( this.HTML.indexOf( "<div id=\"vContent\"" ) == -1 ){
-				throw new Error("해당 만화의 HTML를 잃어올 수 없습니다. 마루마루 사이트 자체의 문제인지 확인해보시고 다시 시도해주세요.\n(Can't not open http://marumaru.in/b/"~page_type~"/"~id~")\n==================================================\n참조:\n"~this.HTML);
-			}
-			// 미리 읽기가 등록되어 있다면...
-			else if( load )
-			{
-				this.LIST = getList();
-			}
-		}
+	/**
+ 	* 생성자
+ 	*/
+	this( ulong id ) {
+		this(to!string(id));
 	}
 
-	//
-	// @ 본문만 따오기(vContent)
-	//
-	private string stripBody(){
+	/**
+	 * 생성자
+	 */
+	this( string comics_id ){
+		// ID 저장
+		this.id = comics_id;
+		
+		// 입력한 문자열이 숫자형태인지 검증
+		auto result = re.match( comics_id, ctRegex!("^[\\d]+$") );
+		if( result.empty() ){
+			throw new Exception("옳바른 숫자 형식이 아닙니다.");
+		}
+		string id_number = result.front.hit();
+
+		//id 가지고 주소 가지고 있기(this.htmlText)
+		navigate("http://marumaru.in/b/manga/"~id_number);
+
+		// 마스터 태그 선언(html의 태그,속성 한방에 지우는 표현식)
+		//this.masterTag = "[!#A-z0-9=\"-:;,가-힣 \\.\\(\\)]";
+		this.masterTag = "[!#A-z0-9가-힣=\"'-:;, \\.\\(\\)&]";
+		this.cookedHtmlText = stripTags( stripBody(this.htmlText) );
+	}
+
+	/**
+	 * 태그 지우기
+	 */
+	private string stripTags( string origin_text ){
+		// 아예 필요없어서 제거해버리는 태그 정의
+		string tags = [];
+		
+		string[] dont_need_words = [
+			" *&nbsp; *",
+			" *amp; *",
+			"\n",
+			"<br[/]*>"
+		];
+
+		// 앵커<a>를 제외한 html표준 태그 정의
+		string[121] html_tags = [
+			"h1", "h2", "h3", "h4", "h5", "h6", "abbr", "acronym", "address", "applet", "area", "article",
+			"aside", "audio", "b", "base", "basefont", "bdi", "bdo", "big", "blockquote", "body", "br",
+			"button", "canvas", "caption", "center", "cite", "code", "col", "colgroup", "datalist", "dd",
+			"del", "details", "dfn", "dialog", "dir", "div", "dl", "dt", "em", "embed", "fieldset", "figcaption",
+			"figure", "font", "footer", "form", "frame", "frameset", "head", "header", "hr", "html", "i", "iframe",
+			"img", "input", "ins", "kbd", "keygen", "label", "legend", "li", "link", "main", "map", "mark", "menu",
+			"menuitem", "meta", "meter", "nav", "noframes", "noscript", "object", "ol", "optgroup", "option", "output",
+			"p", "param", "picture", "pre", "progress", "q", "rp", "rt", "ruby", "s", "samp", "script", "section", "select",
+			"small", "source", "span", "strike", "strong", "style", "sub", "summary", "sup", "table", "tbody", "td", "textarea",
+			"tfoot", "th", "thead", "time", "title", "tr", "track", "tt", "u", "ul", "var", "video", "wbr"
+		];
+		
+		string result_text = origin_text;
+
+		//map!(tag=>dont_need_words[$]=" *</*"~tag~this.masterTag~"*> *")( html_tags );
+		foreach( tag; html_tags ){
+			dont_need_words ~= " *</*"~tag~this.masterTag~"*> *";
+		}
+
+		foreach( word; dont_need_words ){
+			result_text = re.replaceAll(result_text, regex(word), "");
+		}
+		// 한번에 제거
+
+		
+
+
+		return result_text;
+	}
+
+	/**
+	 * 주소로 이동
+	 */
+	private void navigate( string url ){
+		this.htmlText = getRequest(url);
+	}
+
+	/**
+	 * 본문만 따오기
+	 */
+	private string stripBody( string html_text ){
 		// start_tag의 서식 정의
 		immutable string format1 = "<div id=\"vContent\" class=\"content\">";
 		immutable string format2 = "<div class=\"ctt_box\">";
@@ -449,423 +543,247 @@ class Cartoon{
 		string start_tag;
 
 		// class="content"가 검색됬는가?
-		if( this.HTML.indexOf(format1) )
-		{
+		if( html_text.indexOf(format1) ){
 			start_tag = format1;
 		}
 		// class="ctt_box"가 검색됬는가?
-		else if( this.HTML.indexOf(format2))
-		{
+		else if( html_text.indexOf(format2) ){
 			start_tag = format2;
 		}
-		else // 이것도 저것도 검색이 안되는 경우 None.
-		{
-			debug{
-				log("stripBody(fn)_thisHTML(str).txt", this.HTML);
-			}
-			return "None";
+		// 이것도 저것도 검색이 안되는 경우
+		else{ 
+			throw new Exception("본문에서 만화주소 부분의 태그를 읽는데 실패했습니다.");
+			scope(failure) return "";
 		}
 
-		uint x = this.HTML.indexOf(start_tag) + start_tag.length;
-		uint y = this.HTML[x..this.HTML.length].indexOf( end_tag );
-		try{
-			return this.HTML[x..x+y];
+		// uint → auto ; LDC 1.1에서 ulong/uint 간의 타입 선언 차이로 이렇게 해야 빌드 됨.
+		auto x = html_text.indexOf(start_tag) + start_tag.length;
+		auto y = html_text[x..$].indexOf(end_tag);
+
+		if(x < x+y){
+			return html_text[x..x+y];
 		}
-		catch( core.exception.RangeError e )
-		{
-			debug
-			{ log("stripBody(fn)_thisHTML(str)~RangeError.txt", this.HTML); }
+		else if(x+y < x){
+			debug{
+				writeln("[stripBody] - Out of range...");
+				write("x:"); writeln(x);
+				write("y:"); writeln(y);	
+			}
+			throw new Exception("본문에서 만화주소 부분의 위치(범위)를 읽는데 실패했습니다.");
 		}
-		return "None";
+		return "";
 	}
 
+	/**
+	 * 해당 키워드로 만화 검색 후 결과 제공(수정 예정)
+	 */
+	string[string][] search( string keyword, bool with_url=true ){
+		string[string][] result;
+		navigate("http://marumaru.in/?r=home&mod=search&keyword="~keyword~"&x=0&y=0");
+		// 패턴매칭 서식
+		// [0]: 모든 문자열, [1]: /b/manga/ID, [2]: ID, [3]: 만화 제목
+		string patthen = "<a href=\"(\\/b\\/manga\\/([\\d]+))\" class=\"subject\">[\n<tablerd>]+<span class=\"thumb\">.+[\n<\\/tablerd>]+<div class=\"sbjbox\">\n<b>(.+)<\\/b>";
+		auto match_result = re.matchAll( this.htmlText, regex(patthen) );
 
-
-	//
-	// @ URL을 <a href~ 스타일로 재작성
-	//
-	string stripHref(){
-		// 실제 콘텐츠 부분만 따옴
-		string temp = stripBody();
-		debug{ log( "stripHref(fn)_temp(str)1.txt", temp ); } 
-		string stripHref;
-		
-		// <a~부분부터 개행으로 분리하고 필요없는 닫는 태그 지움( array[0]을 array[1]로 ... )
-		string[] replace_list = [
-			// 개행으로 보기 쉽게
-			"><a",																">\n<a ",
-
-			// 주요 삭제 태그들
-			" *&nbsp; *",														"",
-			" *amp; *",															"",
-			" *</*span[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",					"", // span
-			" *</*font[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",					"", // font
-			" *</*p[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",						"", // p
-			" *</*[div]{1,3}[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]*> *",			"", // div, i
-
-			// 앵커에 붙은 스타일 삭제
-			" *target=\"_[\\w]+\" *",											"",
-			" *style=\"[!#A-z0-9=\"-:;,돋움굴림 \\.\\(\\)]+\"",					"",
-
-			// 마무리
-			"</[^a][spanfontdiv]*>",											"",
-			" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *",		"",
-			"><a ",																">\n<a ",
-			"</a><a",															"</a>\n<a",
-			"ahref",															"a href"
-		];
-
-		// 태그 정리를 위한 치환
-		for( int i; i <= replace_list.length-1; i+=2 )
-		{
-			temp = replaceAll( temp,
-				regex( replace_list[i] ), replace_list[i+1]
-			);
-
-			// 단계별 디버그 출력
-			debug{
-				log("stripHref(fn)_temp(str)~ParsingStep"~to!string(i)~".txt", temp);
-			}
+		foreach( element; match_result ){
+			result ~= [
+				element[3] : with_url ? element[1]:element[2]
+			];
 		}
-
-		// 치환 후에 결과 한번더 디버그 출력
-		debug{ log( "stripHref(fn)_temp(str)2.txt", temp ); }
-
-		// 입력 준비
-		string[] split_result = std.regex.split(temp, regex("\n") );
-
-		foreach( line; split_result) {
-
-			// href 따로 innerText 따로 추출하기
-			string href, innerText;
-
-			// 먼저 href
-			auto obj = match( line, regex( this.CHAPTER_MATCHING_PATTHEN) );
-			if( !obj.empty() )
-			{
-				href = obj.front.hit();
-				debug { log( "stripHref(fn)_href(str).txt", href ); }
-
-				/*
-				auto obj2 = matchAll( line, regex("\">(.+)</a>") );
-				foreach( e; obj2 ){
-					innerText = e[1];
-					// ">만화 <font~~> 3권<a href=" 같이 태그가 덜 지워진 경우 안에서 또 지우는 작업 시작
-					if( innerText.indexOf("<") != -1 )
-					{
-						// span, font 태그에 대해서 한번에 지우는 패턴!
-						innerText = replaceAll( innerText, regex(" *<[fontspa]+ [stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]+> *"), "" );
-					}
-				}
-				debug{ log( "stripHref(fn)_stripHref.txt",  href~"  /  "~innerText ); }
-				stripHref ~= "<a "~href~"\">"~innerText~"</a>\n";*/
-
-				stripHref ~= href~"\n";
-			}
-			
-		}
-		debug{ log( "stripHref(fn)_stripHref(str).txt", stripHref ); }
-		return stripHref;
-	} 
-
-	//
-	// @ 커버이미지 URL 가져오기
-	//
-	string getCoverImage(){
-		string html_fix = stripBody();
-		string[] regex_patthens = [
-			r"http:\/\/marumaru.in\/imgr\/[\S]+\.[jpneg]{3,4}",
-			r"http:\/\/marumaru.in\/files\/[\d]+\/[\d]+\/[\d]+\/[\S]+\.[jpneg]{3,4}",
-			r"http:\/\/marumaru.in\/[quickmager]{4,10}\/[\S]+\.[jpneg]{3,4}",
-			r"http[s]*:\/\/[\d].bp.blogspot.com\/[\S]+\/[\S]+\/[\S]+\/[\S]+\/[\S]+\/[\S]+\.[jpneg]{3,4}",
-			r"http[s]*:\/\/imagizer\.imageshack.us\/[\S]+\/[\S]+\/[\d]+\/[\S]+\.[jpneg]{3,4}"
-		];
-		
-		// 패턴매칭 시작
-		foreach( patthen; regex_patthens ) {
-
-			// 일치하는 단 한개만 가져오기!
-			auto result = match( html_fix, patthen );
-
-			// 매치하는 게 있다면 https를 http로 바꾼 후 리턴.
-			if( !result.empty() ){
-				return replace( result.front.hit(), "https", "http");
-			}
-		}
-		// **보류**
-		// 이거 예외 처리 하긴 해야 됨...
-		return "None";
+		return result;
 	}
 
-
-
-	//
-	// @ 만화제목 얻기
-	//
+	/**
+	 * 만화제목 얻기
+	 */
 	string getTitle(){
-		auto result = match( this.HTML, regex(r"<h1>(.+)<\/h1>") );
-		string temp;
-		foreach( e; result ) { temp = e[1]; }
+		auto re_result = re.match( this.htmlText, ctRegex!(r"<h1>(.+)<\/h1>") );
+		string title;
+		
+		foreach( e; re_result )
+			{ title = e[1]; }
 
 		// <h1>~</h1> 태그 안에 또다른 태그가 존재한다면,
-		if( temp.indexOf("<") != -1 || temp.indexOf(">") != -1 )
-		{
-			temp = replaceAll( temp, regex(" *</*[fontspa]+ *[stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]*> *"), "" );
+		if( title.indexOf("<") != -1 || title.indexOf(">") != -1 ){
+			title = re.replaceAll( title, ctRegex!(" *</*[fontspa]+ *[stycolrface =\"#\\d\\w,:;\\.\\-\\(\\)]*> *"), "" );
 		}
-		return temp;
+		return title;
 	}
 
-	//
-	// @ ~화:링크 얻기( 다형식 연관 배열 스타일로)
-	//
-	string[string][] getList(){
-		string[string][] result;
-		string temp = stripHref();
-
-		debug{ string forlog = (temp~"\n\n\n\n\n"); }
-
-		foreach( line; std.regex.split(temp, regex("\n")) ) {
-			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
-			foreach( e; regex_result )
-			{
-				// key에 앵커(html:a) 태그가 있는 경우 제거하자 => 마루마루 페이지가 워낙 엉망이라서...
-				// ex) 블리치:84968
-				result~= [ e[2]:e[1] ];
-				debug{ forlog ~=  (e[2]~":"~e[1]~"\n"); }
-			}
-		}
-
-		debug{
-			log("getList(fn)_forlog.txt", forlog);
-		}
-		result.length -= result.uniq().copy(result).length;
-		return result;
-	}
-
-	//
-	// @ ~화:링크 얻기(연관배열 스타일로)
-	//
-	string[string] getListByArray(){
-		string[string] result;
-		string temp = stripHref();
-
-		foreach( line; std.regex.split(temp, regex("\n")) )
-		{
-			auto regex_result = matchAll(line, this.CHAPTER_MATCHING_PATTHEN);
-			foreach( e; regex_result )
-			{
-				string key, value;
-				key = e[2]; value = e[1];
-				result[key] = value;
-			}
-		}
-		return result;
-	}
-
-	//
-	// @ 만화이미지 얻어오기
-	//
-	string[] getImageUrls( string chapter_name )
-	{
-		string[] result = [];
-		string[string][] list = null;
+	/**
+	 * 카테고리 별로 만화 목록 가져오기(수정 예정)
+	 */
+	deprecated string[string] getCartoonList( CategoryID category_enum ){
+		string id = to!string(category_enum);
+		string category = to!string(id2str(category_enum));
 		
-		list = getList();
-		string[] regex_patthens = [
-			"src=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)\"",
-			"src=\"(http://i.imgur.com/[\\S]+\\.[JjPpEeNnGg]{3,4})[%\\d]*\"",
-			"src=\"(http://[wblog\\.]*[sheyun]{3,4}comics.com/[wpm]{1,2}-content/upload[s]*/[\\d/]*[\\S]+\\.[JjPpEeNnGg]{3,4}[\\?\\d]*)",
-			"src=\"(http[s]*://[\\d]+\\.bp\\.blogspot\\.com/[\\S/-]*/[\\S]+\\.[JjPpEeNnGg]{3,4})\"",
-			"src=\"/(storage/gallery/[\\w\\d_-]+/[가-힣 \\.\\w\\d\\(\\)\\%_-]+\\.[JjPpEeNnGg]{3,4})"
+		string base_url = "www.marumaru.in/?c=1/"~id;
+		string[string] cartoon_list; // 인덱스 리스트
+		ushort page_count; // 페이지 수
+		
+		// 이 카테고리의 페이지는 얼마나 되느뇨?
+		string html = getRequest( base_url );
+
+		// match_result TO array
+		auto match_result = re.matchAll( html, ctRegex!(r">([\d]+)</[span]{1,4}>") );
+		string[] temp;
+		map!(x => temp~=x[1])( array(match_result) );
+		sort(temp);
+		
+		page_count = to!ushort( temp[temp.length-1] );
+
+		// 페이지 별로 파싱 (1, 2, 3 페이지...)
+		foreach( page; temp ){
+			html = getRequest( base_url~"&cat="~category~"&p="~page );
+			auto urls_match = re.matchAll( html,
+				ctRegex!(r"uid=([\d]+).><span class=.cat.>[\S ]+<\/span>([\d\S ]+)<\/a>")
+			);
+			map!(e=>cartoon_list[e[2]]~=e[1])( urls_match );
+		}
+		return cartoon_list;
+	}
+
+	/**
+	* 만화 회차 얻기
+	*/
+	cartoonLink[] getChapters(){
+		// 만화 호스팅 도메인들
+		string[] domains = [
+			"shencomics.com",
+			"wasabisyrup.com",
+			"yuncomics.com"
 		];
 
-		foreach( element; list ) {
+		// URL이랑 회차 검색을 위한 표현식생성
+		string patthen = "<a"~this.masterTag~"*(http://[wblog\\.]*["~domains.join()~"]+/archives/[_0-9A-z-]+)\""~this.masterTag~"*>(.+)";
 
-			// 입력 받은 챕터와 리스트의 챕터가 같으면 다운받음. else없음.
-			if( element.keys[0] == chapter_name ) {
+		// 패턴 객체 생성
+		auto regex_object = regex(patthen);
 
-				// phantomjs로 js가포함된 웹페이지 html 얻어오기
-				auto ghost = new Ghost( element[chapter_name], this.BROWSER_TYPE );
-				string html = ghost.Grab();
+		// 생성자에서 치환된 this.textBody로 부터 배열생성(구분자:</a>)
+		uint num = 0;
+		cartoonLink[] links; // 결과물 담을 배열
+		foreach( raw_chapter_url; split(this.cookedHtmlText, "</a>") ){
+			// 매치( 검색 문자는 url과 회차 제목이기 때문에 matchAll 사용함 )
+			auto result_object = re.matchAll( raw_chapter_url, regex_object );
+			
+			string url = result_object.front[1];
+			string inner = result_object.front[2];
+
+			// 비어있지 않다면 cartoonLink 구조체 저장
+			if( url!="" && inner!="" ){
+				cartoonLink link;
 				
-				debug { log( "getImageUrl(fn)_html(str).txt", html ); }
+				link.title = this.getTitle();
+				link.id = to!uint(this.id);
+				link.name = this.stripTags(inner);
+				link.url = url;
 
-				// 이미지 파일의 패턴 매칭-인장검출-다운로드받을리스트추가
-				foreach( patthen; regex_patthens ) {
-
-					// url들.
-					auto match_result = matchAll( html, regex(patthen) );
-					if( !(match_result.empty())  ) {
-
-						// regex에 검색된 이미지 파일 하나하나씩 인장인지 확인하고 아닐 경우만 다운리스트에 추가
-						foreach( temp; match_result ) {
-
-							// src="url", url 에서 url만 따온다 -> src= 부분 빼고 ... 
-							string url = temp[1];
-
-							// 이름이 혹시 (dummy.jpg?1234) 형식이라면 뒤에 ?~ 부분 삭제
-							if( url.indexOf("?") != -1 ) { url = replaceAll( url, regex("\\?[\\d]+"), ""); }
-							
-							// 만약 (n).dp.blogspot.com에서 https라면 http로 변경
-							url = replaceAll( url, regex("https://[\\d]+.bp.blogspot.com"), "http://3.bp.blogspot.com");
-
-							// wasabisyrup 도메인 추가
-							url = url.replace("storage/gallery","http://wasabisyrup.com/storage/gallery" );
-							result ~= url;
-						}
-					}
-				}
-
-				// Exit - 만약 생성된 리스트가 비어있다면 Throw 함.
-				if( result.length == 0 ) {
-					string temp;
-					foreach( e; regex_patthens) {
-						temp~=(e~"\n");
-					}
-
-					debug{ log("used_patthens.txt", temp~"\n\nelement[key]: \n\nHTML:\n"~html); }
-					throw new Error("Coudn't create a url list(만화의 이미지파일 주소를 찾는데 실패했습니다.)\n[ID:'"~this.ID~"'/제목:'"~this.getTitle()~"']");
-				}
-
-				// 리스트에서 중복항목을 제거	
-				result = ezUniq(result);
-
-				// 리스트에서 마루마루 관련 인장 제거
-				result = ezFilter(result, "우마루세로");
-				result = ezFilter(result, "oeCAmOD");
+				links ~= link;
 			}
 		}
-		// 검색된 만화 URL 배열을 텍스트 로그 출력
-		debug{
-			logArray("getImageUrls(fn)_result(str[]).txt", result);
+		// +++ 링크가 비어있을 때의 예외추가
+		if( links.length == 0 ){
+			string msg = "만화 회차와 호스팅 URL를 얻어 오는데 실패했습니다. REF[ID#"~this.id~"]";
+			msg ~= "::"~this.cookedHtmlText;
+			throw new Exception(msg);
+			scope(failure) return links;
 		}
-		// 중복제거
-		return ezUniq(result);
+		return links;
 	}
-
-	//
-	// @ 다운로드 실행
-	//
-	void download( string chapter_name, string path=".", bool fix_name=true, bool cre_zip=false )
-	{
-		string[] member_path_list;
-		string[] file_url_list = getImageUrls( chapter_name );
-		
-		if( file_url_list.length != 0 ) {
-
-			// 파일 이름 앞에 숫자(000N) 넣기 위한 변수 선언
-			uint counter_num = 0; 
-			string counter_str = "";
-
-			// 입력받은 url배열에서 요소 하나씩 꺼내기
-			foreach( file_url; file_url_list ) {
-
-				// url상에서 파일이름만 추출
-				string file_name = file_url.split("/")[ file_url.split("/").length-1 ];
-				
-				// 추출된 파일이름 검증 & 검증되지 않으면 작업하지 않음.
-				auto file_name_verify_match = match( file_url, regex("[\\S]+\\.[JjPpEeNnGg]{3,4}") );
-				if( !file_name_verify_match.empty() )
-				{
-					// 원하는 경우에만 파일 앞에 0001~0009_로 서식변경
-					if(fix_name == true) {
-						import std.format;
-						auto wf = std.array.appender!string();
-						formattedWrite(wf, "%.4d",counter_num);
-						counter_str = wf.data;
-						counter_num+=1;
-					}
-					
-					//
-					// --------------- 다운로드 프로세싱 ---------------
-					//
-					string local_path = path~"/";
-					file_name = replace(file_name, "/", "");
-
-					string local_file_name = local_path~counter_str~"_"~file_name;
-
-					std.net.curl.download(
-						encode(file_url),
-						local_file_name
-					);
-
-					debug{ writeln("다운로드(download): "~ file_url~" To "~local_file_name); }
-
-					// 압축해야할 리스트에 해당 파일 추가
-					member_path_list ~= local_file_name;
-
-					// 데이터 검증(~10kb이하면서 ?(n) 스타일의 URL이미지는 덧씌우기 작업을 한다)
-					const ushort byte_verify = 10000;
-					if( getSize( local_file_name ) <= byte_verify ) {
-
-						// '? + 랜덤 5자리' 생성
-						import std.random:randomSample;
-						string tail = "?";
-						foreach (e; randomSample([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], 5)) { tail ~= std.conv.to!string(e); }
-
-						// 다운로드 재실행
-						// http://www~ 주소 앞부분에 http:// 지워보기
-						std.net.curl.download( encode(file_url~tail), local_file_name );
-						debug{ writeln("깨진파일로 검출됨, : "~local_file_name); writeln("다운로드재실행: "~file_url~tail~" To "~local_file_name); }
-					}
-				}
-				// 추출된 파일이름 검증에 실패한다면,
-				else {
-					throw new Error("Coudn't verify url format(URL 상에서의 파일이름 검증에 실패했습니다).");
-				}
-			}
-
-			//
-			// --------------- 압축파일 생성 여부 ---------------
-			// *** 함수로 분리 예정 ***
-			if( cre_zip == true ) {
-				// 풀 파일 경로에서(/urs/bin/) bin만 구해옴
-				auto local_path_array = split(path, "/");
-				string arch_file_name = local_path_array[ local_path_array.length-1 ]~".zip";
-				
-				// 압축파일 생성 시작
-				import std.zip: ArchiveMember, ZipArchive,CompressionMethod;
-				auto arch_obj = new ZipArchive();
-
-				foreach( member_path; member_path_list ) {
-
-					// 다운로드 받은 이미지 파일이 존재할 때만 쓰기 시작
-					if( exists(member_path) ) {
-						debug{ writeln("압축(ZIP): "~member_path~", 존재함! 압축멤버에 추가시작"); }
-
-						// 이미지 파일 읽기
-						auto member_file = File(member_path, "r+");
-						
-						// 이미지 파일 크기만큼 byte 배열 생성
-						auto member_bytes = new ubyte[ cast(uint)getSize(member_path) ];
-						
-						// byte배열에 읽은 데이터를 담는다
-						member_file.rawRead(member_bytes);
-						
-						// ZIP 멤버 1)생성 + 2)데이터 담고 + 3)압축률 지정
-						ArchiveMember member_obj = new ArchiveMember();
-						member_obj.name = split(member_path,"/")[ split(member_path,"/").length-1 ];
-						member_obj.expandedData(member_bytes);
-						member_obj.compressionMethod(CompressionMethod.deflate);
-						
-						// 압축파일에 멤버 추가
-						arch_obj.addMember( member_obj );
-					}
-				}
-				// 최종 압축
-				void[] compressed_data = arch_obj.build();
-				std.file.write( path~"/"~arch_file_name, compressed_data);
-				debug { writeln("압축(ZIP): "~path~"/"~arch_file_name~", 생성완료!"); }
-			}
-		}
-		else {
-			throw new Error("Coudn't get image urls(이미지URL을 얻어오는데 실패했습니다).\nAddress(참조):"~this.ID);
-		}
+	
+	/**
+	 * 원래의 HTML 코드 얻기
+	 */
+	string getText(){
+		return this.htmlText;
 	}
 }
 
-//--------------------------------------------------------------------------------
+
+
+/**
+ * 리팩토링 피처들
+ */
+//----------------------------------------------------------------------
 //
-// - [ 마루마루 만화클래스;끝 ] -
+// #1. HTML 얻어오기: getRequest 재작성
 //
-//--------------------------------------------------------------------------------
+//----------------------------------------------------------------------
+unittest{
+	string url = "http://marumaru.in/b/manga/41079"; // 나만이 없는 거리:41079
+	string html = getRequest(url);
+	assert(html.indexOf("나만이 없는 거리")+1, "#1 getRequest() → 빈 문자열임"); // -1 + 1 = 0
+}
+
+
+//----------------------------------------------------------------------
+//
+// #2. #1에서 긁어온 HTML에서, 회차만 파싱
+//
+//----------------------------------------------------------------------
+unittest{
+	string url = "http://marumaru.in/b/manga/41079"; // 나만이 없는 거리:41079
+	cartoonLink[] links = scarpChapter(url);
+	foreach(l; links){
+		// 회차 이름에 HTML태그가 남아있는 지 검사
+		assert(l.name.indexOf("<")==-1, "#2 태그검사 오류(<)");
+		assert(l.name.indexOf(">")==-1, "#2 태그검사 오류(>)");
+	}
+	// 링크 파싱 갯수가 0이 아니여야 함 == 파싱성공
+	assert(links.length, "#2 링크 파싱개수가 0임");
+}
+
+
+//----------------------------------------------------------------------
+//
+// #3. #2에서 긁어온 회차 URL로 부터 이미지 URL 따오기
+//
+//----------------------------------------------------------------------
+unittest{
+	string url = "http://marumaru.in/b/manga/41079"; // 나만이 없는 거리:41079
+	cartoonLink[] links = scarpChapter(url);
+
+	// 테스트 목적이므로 맨 첫번째 것만 가져오도록..
+	cartoonPage cp = cartoonPage(links[0]);
+	string[] img_urls = cp.getImageUrls();
+	assert(img_urls.length+1, "#3 이미지 URL 파싱개수가 0임");
+}
+
+
+//----------------------------------------------------------------------
+//
+// #4. #3에서 만든 cartoonPage 구조체를 가지고 다운로드(NOT API, for ConsoleApp)
+//
+//----------------------------------------------------------------------
+unittest{
+	string url = "http://marumaru.in/b/manga/41079"; // 나만이 없는 거리:41079
+	cartoonLink[] links = scarpChapter(url);
+
+	// 테스트 목적이므로 맨 첫번째 것만 가져오도록..
+	cartoonPage cp = cartoonPage(links[0]);
+	//cp.download();
+}
+
+
+//----------------------------------------------------------------------
+//
+// #5. 비밀번호 처리
+//
+//----------------------------------------------------------------------
+unittest{
+	//string url = "http://marumaru.in/b/manga/206969"; // 서른살 처녀와 인기많은 어쩌구(걍 17금 만화 아무거나)
+	string url = "http://wasabisyrup.com/archives/mzemO5HX-HE";
+
+	//cartoonLink[] links = scarpChapter(url);
+	//cartoonPage cp = cartoonPage(links[0]);
+	string html = getRequest(url);
+	
+	if(html.indexOf("Protected")>-1){
+		writeln("보호!");
+		auto content = postContent(url, queryParams("password", "qndxkr", "pass", "qndxkr"));
+		OutBuffer buf = new OutBuffer();
+		buf.write(content.data);
+		writeln(buf.toString());
+	}
+}
