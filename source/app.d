@@ -1,13 +1,13 @@
-module main;
-
+import std.array;
 import std.stdio;
-import xaru;
+import std.conv;
+import std.format;
+import std.string;
+import std.parallelism;
+static import uri = std.uri;
+import requests;
+import marumaru;
 
-/// 버전 넘버링
-const string ver = "0.26A";
-
-
-/// 윈도우 CMD에서 한글출력 용도
 version(Windows){
 	extern(C) int setlocale(int, char*);
 	static this(){
@@ -16,8 +16,12 @@ version(Windows){
 	}
 }
 
-void main(string[] args){
-	writeln(" [ xaru.d ] v"~ver~" / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2"); // 라벨
+
+const string ver = "0.27A";
+
+void main(string[] args)
+{
+	writeln(" [ xaru.d ] v"~ver~" / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2");
 	makeDir("download");
 	string cmd_id;
 
@@ -30,21 +34,18 @@ void main(string[] args){
 	else
 		{ cmd_id = args[1]; }
 
-	string base_url = "http://marumaru.in/b/manga/"~cmd_id;
-
 	// 회차 얻기
-	cartoonLink[] links = scarpChapter(base_url);
-	
+	auto cp = new comicPage(cmd_id);
+	comic co = cp.getLink();
+
 	// 디스플레이
 	writeln("--------------------------------------------------");
-	writeln("  [ 제목:"~links[0].title~" ]");
-	writeln("--------------------------------------------------");
 	uint index = 0;
-	foreach( link; links ){
+	foreach(l; co.links){
 		write("    [");
 		write(index);
 		write("] : ");
-		writeln(text(link.name));
+		writeln(l.title);
 		index += 1;
 	}
 	writeln("--------------------------------------------------");
@@ -61,15 +62,43 @@ void main(string[] args){
 	}
 	else if( cmd_selection == "*" ){
 		start = 0;
-		end = links.length;
-		writeln( to!string(start)~", "~to!string(end));
+		end = co.links.length;
 	}
 	else{
 		writeln("옳바르지 않은 명령어 입니다...");
 	}
 
-	foreach(link; links[start..end]){
-		auto cp = cartoonPage(link);
-		cp.download();
+	for(int i=start; i<end; i++){
+		string[] web_url = co.getFileUrl(i);
+		string chapter_name = co.links[i].title;
+
+		string path = "./download/["
+			~co.id~"]"~stripChar(co.title)~"/"~stripChar(chapter_name)~"/";
+		
+		writeln(path);
+		makeDir(path);
+
+		string[string] re_name;
+		
+		 //252870
+		for(short count=0; count<web_url.length; count++){
+			string f = web_url[count].split("/")[$-1];
+			auto n = std.array.appender!string();
+			formattedWrite(n, "%.4d", count);
+			re_name[web_url[count]] = n.data~"_"~f;
+		}
+		
+		writeln("다운로드 시작: "~chapter_name);
+		foreach(e; parallel(web_url) ){
+			auto rq = Request();
+			auto ds = rq.get(uri.encode(e));
+			
+			std.file.write(
+				path~re_name[e],
+				ds.responseBody.data
+			);
+		}
+		writeln("다운로드 완료: "~chapter_name);
+		writeln("______________________________________________________________________");
 	}
 }
