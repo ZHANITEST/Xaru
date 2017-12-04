@@ -7,6 +7,7 @@ import std.parallelism;
 static import uri = std.uri;
 import requests;
 import marumaru;
+import mini;
 
 version(Windows){
 	extern(C) int setlocale(int, char*);
@@ -17,9 +18,9 @@ version(Windows){
 }
 
 
-const string ver = "0.27A";
+const string ver = "0.28A";
 
-void main(string[] args)
+int main(string[] args)
 {
 	writeln(" [ xaru.d ] v"~ver~" / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2");
 	makeDir("download");
@@ -31,8 +32,13 @@ void main(string[] args)
 		cmd_id = readln();
 		cmd_id = cmd_id.replace("\n", "");
 	}
-	else
+	else if(args.length == 2)
 		{ cmd_id = args[1]; }
+	else if(args.length == 3 && args[1]=="-idx"){
+		miniapp temp = new miniapp(args[2]);
+		temp.download();
+		return 0;
+	}
 
 	// 회차 얻기
 	auto cp = new comicPage(cmd_id);
@@ -101,4 +107,5 @@ void main(string[] args)
 		writeln("다운로드 완료: "~chapter_name);
 		writeln("______________________________________________________________________");
 	}
+	return 0;
 }
