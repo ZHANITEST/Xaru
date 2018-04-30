@@ -14,8 +14,8 @@ dub add-local ./
 cd ..
 
 git clone https://github.com/zhanitest/xaru.git
-cd ..
-dub build
+cd xaru
+dub run
 ```
 
 ## License
