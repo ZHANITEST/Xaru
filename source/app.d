@@ -63,8 +63,12 @@ int main(string[] args)
 	write("[ 회차입력:Index1-Index2 / 모두선택:* ] >>> ");
 	string cmd_selection = readln().replace("\n", "");
 
-	// 다중선택
-	uint start, end;
+	// 다중선택(시작/끝 인덱스 값)
+	uint start;
+
+	// LDC2컴파일러 대응을 위해 ulong으로 처리
+	ulong end;
+	
 	if( cmd_selection.indexOf("-")!= -1 ){
 		// 입력 커맨드를 처리가능하게 편집
 		string[] select = cmd_selection.split("-");
