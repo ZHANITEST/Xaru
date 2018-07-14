@@ -9,6 +9,7 @@ import requests;
 import marumaru;
 import mini;
 
+
 version(Windows){
 	extern(C) int setlocale(int, char*);
 	static this(){
@@ -16,13 +17,17 @@ version(Windows){
 		setlocale(0, cast(char*)"korea");
 	}
 }
+extern(Windows) int SetConsoleOutputCP(uint);
 
-
-const string ver = "0.28A";
+const string ver = "0.3A";
 
 int main(string[] args)
 {
-	writeln(" [ xaru.d ] v"~ver~" / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2");
+	// 빌드모드 명시
+	string build_mode = "release";
+	debug{ build_mode = "debug"; }
+	
+	writeln(" [ xaru.d ] v"~ver~"("~build_mode~") / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2");
 	makeDir("download");
 	string cmd_id;
 
@@ -79,7 +84,7 @@ int main(string[] args)
 		string chapter_name = co.links[i].title;
 
 		string path = "./download/["
-			~co.id~"]"~stripChar(co.title)~"/"~stripChar(chapter_name)~"/";
+			~co.id~"] "~stripChar(co.title)~"/"~stripChar(chapter_name)~"/";
 		
 		writeln(path);
 		makeDir(path);
@@ -96,9 +101,26 @@ int main(string[] args)
 		
 		writeln("다운로드 시작: "~chapter_name);
 		foreach(e; parallel(web_url) ){
+
+			debug{ writeln("chap url:"~co.links[i].url); } // refer헤더에 들어갈 값
 			auto rq = Request();
+			rq.sslSetCaCert("cacert.pem"); // 인증서 추가
+			rq.addHeaders([ //  헤더추가
+				"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+				"Accept-Encoding":"gzip, deflate",
+				"Accept-Language":"ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3",
+				"Connection":"keep-alive",
+				"Host":"wasabisyrup.com",
+				"Referer":co.links[i].url,
+				"Upgrade-Insecure-Requests":"1",
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:61.0) Gecko/20100101 Firefox/61.0"
+			]);
+
 			auto ds = rq.get(uri.encode(e));
-			
+			// 파일 다운로드
+			//File f = File(path~re_name[e], "wb");
+			//f.rawWrite(ds.responseBody.data);
+			//f.close();
 			std.file.write(
 				path~re_name[e],
 				ds.responseBody.data
