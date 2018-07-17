@@ -4,29 +4,26 @@ import std.conv;
 import std.format;
 import std.string;
 import std.parallelism;
+import std.exception: enforce;
+import core.sys.windows.windows: CP_UTF8, SetConsoleOutputCP;
 static import uri = std.uri;
 import requests;
 import marumaru;
 import mini;
 
-
-version(Windows){
-	extern(C) int setlocale(int, char*);
-	static this(){
-		core.stdc.wchar_.fwide(core.stdc.stdio.stdout, 1);
-		setlocale(0, cast(char*)"korea");
-	}
-}
-extern(Windows) int SetConsoleOutputCP(uint);
-
 const string ver = "0.3A";
 
 int main(string[] args)
 {
+	// 빌어먹을 서구권 컴파일러의 한글깨짐 방지(UTF-8 설정)
+	version(Windows){
+		SetConsoleOutputCP(CP_UTF8).enforce;
+	}
+	
 	// 빌드모드 명시
 	string build_mode = "release";
 	debug{ build_mode = "debug"; }
-	
+
 	writeln(" [ xaru.d ] v"~ver~"("~build_mode~") / Copyleft 2017 zhanitest(.egloos.com) / LGPL v2");
 	makeDir("download");
 	string cmd_id;
