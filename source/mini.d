@@ -9,14 +9,6 @@ static import uri = std.uri;
 import requests;
 import marumaru;
 
-version(Windows){
-	extern(C) int setlocale(int, char*);
-	static this(){
-		core.stdc.wchar_.fwide(core.stdc.stdio.stdout, 1);
-		setlocale(0, cast(char*)"korea");
-	}
-}
-
 class miniapp{
     string index;
     this(string index){
