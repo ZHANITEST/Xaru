@@ -1,8 +1,8 @@
 # xaru
 xaru는 marumaru.in의 만화를 일괄로 다운받아주는 커맨드 프로그램입니다.
 
-## Using
-[도움말](https://xaru.ga)
+## Need help?
+Come with a [Discord(kor)](https://discord.gg/FeV9ae)
 
 ## Build
  - Need: DMD 2.6.x~, DUB 1.x~
