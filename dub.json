@@ -8,9 +8,5 @@
     "license": "LGPL v2",
     "dependencies": {
         "marumaru":"~master"
-    },
-    "subConfigurations": {
-        "requests": "vibed"
-    },
-    "lflags":["/NODEFAULTLIB:legacy_stdio_definitions"]
+    }
 }
