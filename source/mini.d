@@ -30,10 +30,13 @@ class miniapp{
 			
             // 파일이름 따기
             string file_name = furl.split("/")[$-1];
-			std.file.write(
+			File f = File(file_name, "wb");
+            f.write(ds.responseBody.data);
+            f.close();
+            /*std.file.write(
 				path~file_name,
 				ds.responseBody.data
-			);
+			);*/
 		}
 		writeln("______________________________________________________________________");
     }
